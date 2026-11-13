@@ -1,0 +1,75 @@
+name: Build
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+# The release job creates a tag and a release
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The adapter is a 32-bit DLL, the patcher a 64-bit exe
+      - name: Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: i686-pc-windows-msvc
+
+      # The patcher embeds the adapter, so the adapter goes first
+      - name: Build
+        run: |
+          cargo build --release --locked -p infra_hpp_adapter --target i686-pc-windows-msvc
+          cargo build --release --locked -p infra_hpp_patcher
+
+      - name: Stage
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item target/release/infra-hpp-patcher.exe, README.md, README_ru.md dist
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: HammerPlusPlus-INFRA-Patcher
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Timestamp
+        id: stamp
+        run: echo "value=$(date -u +%Y%m%d-%H%M%S)" >> "$GITHUB_OUTPUT"
+
+      - name: Download
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # One zip per artifact: <artifact name>-<timestamp>.zip
+      - name: Pack
+        run: |
+          mkdir release
+          for dir in artifacts/*/; do
+            name="$( basename "$dir" )"
+            ( cd "$dir" && zip -r -q "../../release/${name}-${{ steps.stamp.outputs.value }}.zip" . )
+          done
+          ls -l release
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: HammerPlusPlus-INFRA-Patcher-${{ steps.stamp.outputs.value }}
+          name: HammerPlusPlus-INFRA-Patcher-${{ steps.stamp.outputs.value }}
+          target_commitish: ${{ github.sha }}
+          files: release/*.zip
+          fail_on_unmatched_files: true
