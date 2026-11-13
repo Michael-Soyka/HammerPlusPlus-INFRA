@@ -1,0 +1,7 @@
+/target/
+/dist/
+/hammerplusplus_*/
+/tools/
+
+# Image sources
+*.psd

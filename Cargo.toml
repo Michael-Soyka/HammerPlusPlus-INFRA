@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = ["crates/adapter", "crates/patcher"]
+
+# Values are returned through a named binding
+[workspace.lints.clippy]
+let_and_return = "allow"
+missing_safety_doc = "allow"
+
+[profile.release]
+opt-level = 2
+panic = "abort"
