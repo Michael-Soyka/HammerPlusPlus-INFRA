@@ -11,6 +11,8 @@
 3. Запустите **infra-hpp-patcher.exe** (если игра установлена, а папка Hammer++ для Portal 2 лежит рядом с патчером, они подставятся автоматически, иначе укажите их вручную);
 4. Нажмите **Install**;
 
+Опционально: вы можете установить совместимую с этим патчером тёмную тему [Extra Dark](https://github.com/Michael-Soyka/HammerPlusPlus-ExtraDark).
+
 ## Показ
 
 <img width="1920" height="1070" alt="image" src=".github/images/INFRA.png" />

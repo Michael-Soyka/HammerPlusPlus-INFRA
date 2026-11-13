@@ -11,6 +11,8 @@ English Version | [Русская версия](README_ru.md)
 3. Run **infra-hpp-patcher.exe** (if the game is installed and the Hammer++ for Portal 2 folder lies next to the patcher, both are filled in automatically, otherwise pick them manually);
 4. Press **Install**;
 
+Optionally, you can install the compatible with this patcher [Extra Dark](https://github.com/Michael-Soyka/HammerPlusPlus-ExtraDark) theme.
+
 ## Showcase
 
 <img width="1920" height="1070" alt="image" src=".github/images/INFRA.png" />
