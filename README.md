@@ -2,6 +2,8 @@
 
 English Version | [Русская версия](README_ru.md)
 
+If you are looking for the repacker based on CS:GO, go to [HammerPlusPlus-INFRA-RePacker](https://github.com/Michael-Soyka/HammerPlusPlus-INFRA-RePacker).
+
 ## Installation
 
 **Hammer++ must be closed.**
