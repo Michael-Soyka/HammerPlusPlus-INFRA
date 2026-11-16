@@ -18,15 +18,15 @@ use std::path::{ Path, PathBuf };
 use std::ptr::{ null, null_mut };
 use std::time::{ Duration, Instant };
 use windows_sys::Win32::Foundation::{ COLORREF, HWND, LPARAM, LRESULT, MAX_PATH, POINT, RECT, WPARAM };
-use windows_sys::Win32::Graphics::Dwm::{ DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute };
-use windows_sys::Win32::Graphics::Gdi::{ BeginPaint, CreateSolidBrush, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_PATH_ELLIPSIS, DT_SINGLELINE, DT_TOP, DT_VCENTER, DT_WORDBREAK, EndPaint, FW_NORMAL, FW_SEMIBOLD, GetDC, GetStockObject, HBRUSH, HDC, HFONT, InflateRect, InvalidateRect, MapWindowPoints, NULL_BRUSH, PAINTSTRUCT, ReleaseDC, SetBkColor, SetTextColor };
+use windows_sys::Win32::Graphics::Dwm::{ DWMWA_CAPTION_BUTTON_BOUNDS, DWMWA_USE_IMMERSIVE_DARK_MODE, DwmDefWindowProc, DwmExtendFrameIntoClientArea, DwmGetWindowAttribute, DwmSetWindowAttribute };
+use windows_sys::Win32::Graphics::Gdi::{ BeginPaint, CreateSolidBrush, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_PATH_ELLIPSIS, DT_SINGLELINE, DT_TOP, DT_VCENTER, DT_WORDBREAK, ClientToScreen, EndPaint, FW_NORMAL, FW_SEMIBOLD, GetDC, GetStockObject, HBRUSH, HDC, HFONT, InflateRect, InvalidateRect, MapWindowPoints, NULL_BRUSH, PAINTSTRUCT, ReleaseDC, ScreenToClient, SetBkColor, SetTextColor };
 use windows_sys::Win32::System::Com::{ COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoTaskMemFree, CoUninitialize };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows_sys::Win32::UI::Controls::{ DRAWITEMSTRUCT, EM_SETCUEBANNER, ODS_DISABLED, ODS_FOCUS, ODS_SELECTED, WM_MOUSELEAVE };
+use windows_sys::Win32::UI::Controls::{ BufferedPaintInit, BufferedPaintUnInit, DRAWITEMSTRUCT, EM_SETCUEBANNER, MARGINS, ODS_DISABLED, ODS_FOCUS, ODS_SELECTED, WM_MOUSELEAVE };
 use windows_sys::Win32::UI::HiDpi::{ AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, GetDpiForSystem, GetSystemMetricsForDpi, SetProcessDpiAwarenessContext };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{ EnableWindow, SetFocus, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent };
 use windows_sys::Win32::UI::Shell::{ BFFM_INITIALIZED, BFFM_SETSELECTIONW, BIF_NEWDIALOGSTYLE, BIF_RETURNONLYFSDIRS, BROWSEINFOW, DefSubclassProc, DragAcceptFiles, DragFinish, DragQueryFileW, DragQueryPoint, HDROP, SHBrowseForFolderW, SHGetPathFromIDListW, SetWindowSubclass, ShellExecuteW };
-use windows_sys::Win32::UI::WindowsAndMessaging::{ BN_CLICKED, BS_OWNERDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DispatchMessageW, EN_CHANGE, ES_AUTOHSCROLL, GetClientRect, GetDlgCtrlID, GetDlgItem, GetMessageW, GetWindowTextLengthW, GetWindowTextW, HICON, IDC_ARROW, IDC_WAIT, IMAGE_ICON, IsDialogMessageW, KillTimer, LR_DEFAULTCOLOR, LoadCursorW, LoadImageW, MSG, PostQuitMessage, RegisterClassExW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_HIDE, SW_SHOW, SW_SHOWDEFAULT, SW_SHOWNORMAL, SendMessageW, SetCursor, SetTimer, SetWindowTextW, ShowWindow, TranslateMessage, WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_DESTROY, WM_DRAWITEM, WM_DROPFILES, WM_ERASEBKGND, WM_MOUSEMOVE, WM_PAINT, WM_SETFONT, WM_TIMER, WNDCLASSEXW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE };
+use windows_sys::Win32::UI::WindowsAndMessaging::{ BN_CLICKED, BS_OWNERDRAW, CW_USEDEFAULT, CreateWindowExW, DI_NORMAL, DefWindowProcW, DispatchMessageW, DrawIconEx, EN_CHANGE, ES_AUTOHSCROLL, GetClientRect, GetDlgCtrlID, GetDlgItem, GetMessageW, GetWindowRect, GetWindowTextLengthW, HTCAPTION, HTCLIENT, GetWindowTextW, HICON, IDC_ARROW, IDC_WAIT, IMAGE_ICON, IsDialogMessageW, KillTimer, LR_DEFAULTCOLOR, LoadCursorW, LoadImageW, MSG, NCCALCSIZE_PARAMS, PostQuitMessage, RegisterClassExW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_HIDE, SW_SHOW, SW_SHOWDEFAULT, SW_SHOWNORMAL, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SendMessageW, SetCursor, SetTimer, SetWindowPos, SetWindowTextW, ShowWindow, TranslateMessage, WM_ACTIVATE, WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_DESTROY, WM_DRAWITEM, WM_DROPFILES, WM_ENTERSIZEMOVE, WM_ERASEBKGND, WM_EXITSIZEMOVE, WM_MOUSEMOVE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SETFONT, WM_TIMER, WNDCLASSEXW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE };
 
 const DOWNLOAD_URL: &str = "https://ficool2.github.io/HammerPlusPlus-Website/download.html";
 const CLASS:        &str = "InfraHppSetup";
@@ -73,6 +73,9 @@ struct Bounds
 // Path edits sit inside drawn rounded frames with a padding
 const GAME_FRAME:    Bounds = Bounds { x: 16, y: 84, width: 470, height: 32 };
 const HPP_FRAME:     Bounds = Bounds { x: 16, y: 176, width: 372, height: 32 };
+
+// Without the Download button, as wide as the INFRA field
+const HPP_WIDE_FRAME: Bounds = Bounds { width: GAME_FRAME.width, ..HPP_FRAME };
 const FIELD_PADDING: i32 = 7;
 const FIELD_RADIUS:  i32 = 6;
 const FOCUS_RADIUS:  i32 = 5;
@@ -81,6 +84,12 @@ const INFO_RADIUS:   i32 = 9;
 
 // Files dropped below this line go to the Hammer++ field
 const HPP_SECTION_TOP: i32 = 150;
+
+// The app icon left of the title, in place of the window title bar
+const TITLE_ICON: Bounds = Bounds { x: 16, y: 18, width: 28, height: 28 };
+
+// Dragging by this strip moves the window
+const DRAG_HEIGHT: i32 = 56;
 
 const BACKGROUND_TIMER: usize = 1;
 
@@ -125,7 +134,7 @@ struct Label
 
 const LABELS: [Label; 7] =
 [
-	Label { id: ID_TITLE, bounds: Bounds { x: 16, y: 14, width: 568, height: 36 }, title: true, format: LINE },
+	Label { id: ID_TITLE, bounds: Bounds { x: 54, y: 14, width: 530, height: 36 }, title: true, format: LINE },
 	Label { id: ID_GAME_LABEL, bounds: Bounds { x: 16, y: 62, width: 568, height: 20 }, title: false, format: LINE },
 	Label { id: ID_GAME_STATUS, bounds: Bounds { x: 16, y: 122, width: 568, height: 20 }, title: false, format: PATH_LINE },
 	Label { id: ID_HPP_LABEL, bounds: Bounds { x: 16, y: 154, width: 568, height: 20 }, title: false, format: LINE },
@@ -191,7 +200,7 @@ const INSTALLED_ROW: [i32; 3] = [ ID_REMOVE, ID_REINSTALL, ID_LAUNCH ];
 const CUE_BANNERS: [(i32, &str); 2] =
 [
 	( ID_GAME, "C:\\Program Files (x86)\\Steam\\steamapps\\common\\infra" ),
-	( ID_HPP, "hammerplusplus_portal2_buildNNNN" ),
+	( ID_HPP, "hammerplusplus_portal2_buildXXXX" ),
 ];
 
 struct ButtonColors
@@ -240,6 +249,17 @@ struct App
 	// Id of the button under the cursor, 0 for none
 	hovered: Cell<i32>,
 
+	// Widens when the Download button hides
+	hpp_frame: Cell<Bounds>,
+
+	// Height of the removed title bar: the DWM frame extends this far into the client area
+	caption: Cell<i32>,
+
+	title_icon: Cell<HICON>,
+
+	// The window is being dragged
+	moving: Cell<bool>,
+
 	// The dimmed video frame under everything
 	scene: RefCell<Option<Canvas>>,
 
@@ -258,6 +278,10 @@ thread_local!
 		field:      Cell::new( null_mut() ),
 		dpi:        Cell::new( DEFAULT_DPI ),
 		hovered:    Cell::new( 0 ),
+		hpp_frame:  Cell::new( HPP_FRAME ),
+		caption:    Cell::new( 0 ),
+		title_icon: Cell::new( null_mut() ),
+		moving:     Cell::new( false ),
 		scene:      RefCell::new( None ),
 		labels:     RefCell::new( HashMap::new() ),
 		state:      RefCell::new( State::default() ),
@@ -1082,12 +1106,21 @@ fn on_paint()
 	copy_scene( frame.dc, &whole, 0, 0 );
 
 	gdi::fill_round_rect( frame.dc, &scale_bounds( GAME_FRAME ), FIELD, BORDER, FIELD_RADIUS );
-	gdi::fill_round_rect( frame.dc, &scale_bounds( HPP_FRAME ), FIELD, BORDER, FIELD_RADIUS );
+	gdi::fill_round_rect( frame.dc, &scale_bounds( app( |app| app.hpp_frame.get() ) ), FIELD, BORDER, FIELD_RADIUS );
 	draw_labels( frame.dc );
+	draw_title_icon( frame.dc );
 
-	frame.copy_to( dc, &whole, 0, 0 );
+	gdi::present( dc, &frame, &whole, caption_buttons() );
 
 	unsafe { EndPaint( window, &paint ) };
+}
+
+fn draw_title_icon( dc: HDC )
+{
+	let rect = scale_bounds( TITLE_ICON );
+	let icon = app( |app| app.title_icon.get() );
+
+	unsafe { DrawIconEx( dc, rect.left, rect.top, icon, rect.right - rect.left, rect.bottom - rect.top, 0, null_mut(), DI_NORMAL ) };
 }
 
 fn create_scene( window: HWND, width: i32, height: i32 ) -> Canvas
@@ -1119,7 +1152,7 @@ fn render_scene()
 // Paused under a card: it shows a snapshot of the window anyway
 fn on_background_tick()
 {
-	if modal::is_open() || !background::advance()
+	if modal::is_open() || app( |app| app.moving.get() ) || !background::advance()
 	{
 		return;
 	}
@@ -1243,6 +1276,22 @@ fn add_controls()
 	}
 }
 
+// The build next to the installer needs no download: its field takes the place of the button
+fn hide_download()
+{
+	let edit = scale_bounds( field_edit( HPP_WIDE_FRAME ) );
+
+	app( |app| app.hpp_frame.set( HPP_WIDE_FRAME ) );
+
+	unsafe
+	{
+		ShowWindow( item( ID_HPP_DOWNLOAD ), SW_HIDE );
+		SetWindowPos( item( ID_HPP ), null_mut(), edit.left, edit.top, edit.right - edit.left, edit.bottom - edit.top, SWP_NOZORDER );
+	}
+
+	invalidate( window() );
+}
+
 // Found folders fill the fields, which refreshes them through EN_CHANGE
 fn fill_fields()
 {
@@ -1263,6 +1312,11 @@ fn fill_fields()
 	{
 		refresh_hpp();
 	}
+
+	if state().hpp.is_some()
+	{
+		hide_download();
+	}
 }
 
 fn set_dark_title_bar( window: HWND )
@@ -1272,11 +1326,104 @@ fn set_dark_title_bar( window: HWND )
 	unsafe { DwmSetWindowAttribute( window, DWMWA_USE_IMMERSIVE_DARK_MODE as u32, ( &raw const dark ).cast(), size_of::<i32>() as u32 ) };
 }
 
+//-----------------------------------------------------------------------------
+// Frame: the title bar is removed, DWM draws its buttons over the client area
+//-----------------------------------------------------------------------------
+
+fn extend_frame( window: HWND )
+{
+	let margins = MARGINS { cxLeftWidth: 0, cxRightWidth: 0, cyTopHeight: app( |app| app.caption.get() ), cyBottomHeight: 0 };
+
+	unsafe { DwmExtendFrameIntoClientArea( window, &margins ) };
+}
+
+// Client coordinates of the minimize, maximize and close buttons
+pub fn caption_buttons() -> Option<RECT>
+{
+	let window = window();
+
+	let mut bounds = RECT::default();
+	let mut frame  = RECT::default();
+	let mut origin = POINT { x: 0, y: 0 };
+
+	let read = unsafe { DwmGetWindowAttribute( window, DWMWA_CAPTION_BUTTON_BOUNDS as u32, ( &raw mut bounds ).cast(), size_of::<RECT>() as u32 ) } == 0;
+
+	if !read
+	{
+		return None;
+	}
+
+	// The bounds are relative to the window, not to its client area
+	unsafe
+	{
+		GetWindowRect( window, &mut frame );
+		ClientToScreen( window, &mut origin );
+	}
+
+	let x = origin.x - frame.left;
+	let y = origin.y - frame.top;
+
+	let buttons = RECT { left: bounds.left - x, top: bounds.top - y, right: bounds.right - x, bottom: bounds.bottom - y };
+
+	Some( buttons )
+}
+
+// The default borders without the title bar and the top border
+fn on_nc_calc_size( window: HWND, wparam: WPARAM, lparam: LPARAM ) -> LRESULT
+{
+	if wparam == 0
+	{
+		return unsafe { DefWindowProcW( window, WM_NCCALCSIZE, wparam, lparam ) };
+	}
+
+	let client = unsafe { &raw mut ( *( lparam as *mut NCCALCSIZE_PARAMS ) ).rgrc[ 0 ] };
+	let top    = unsafe { ( *client ).top };
+
+	unsafe
+	{
+		DefWindowProcW( window, WM_NCCALCSIZE, wparam, lparam );
+
+		( *client ).top = top;
+	}
+
+	0
+}
+
+// The title strip moves the window; the caption buttons are already answered by DwmDefWindowProc
+fn on_hit_test( window: HWND, lparam: LPARAM ) -> LRESULT
+{
+	let hit = unsafe { DefWindowProcW( window, WM_NCHITTEST, 0, lparam ) };
+
+	if hit != HTCLIENT as LRESULT
+	{
+		return hit;
+	}
+
+	let mut point = lparam_point( lparam );
+
+	unsafe { ScreenToClient( window, &mut point ) };
+
+	if point.y < scale( DRAG_HEIGHT )
+	{
+		return HTCAPTION as LRESULT;
+	}
+
+	hit
+}
+
 fn on_create( window: HWND )
 {
 	app( |app| app.window.set( window ) );
 
 	set_dark_title_bar( window );
+	extend_frame( window );
+
+	// Applies WM_NCCALCSIZE to the window just created
+	unsafe { SetWindowPos( window, null_mut(), 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER ) };
+
+	let icon = load_icon( scale( TITLE_ICON.width ), scale( TITLE_ICON.height ) );
+
+	app( |app| app.title_icon.set( icon ) );
 
 	let font       = gdi::create_font( 15, FW_NORMAL as i32 );
 	let title_font = gdi::create_font( 26, FW_SEMIBOLD as i32 );
@@ -1311,8 +1458,41 @@ fn hiword( wparam: WPARAM ) -> u32
 
 unsafe extern "system" fn window_proc( window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM ) -> LRESULT
 {
+	// Hover, press and hit testing of the caption buttons
+	let mut handled = 0;
+
+	if unsafe { DwmDefWindowProc( window, message, wparam, lparam, &mut handled ) } != 0
+	{
+		return handled;
+	}
+
 	match message
 	{
+		WM_NCCALCSIZE => on_nc_calc_size( window, wparam, lparam ),
+
+		WM_NCHITTEST => on_hit_test( window, lparam ),
+
+		WM_ACTIVATE =>
+		{
+			extend_frame( window );
+
+			unsafe { DefWindowProcW( window, message, wparam, lparam ) }
+		}
+
+		WM_ENTERSIZEMOVE =>
+		{
+			app( |app| app.moving.set( true ) );
+
+			0
+		}
+
+		WM_EXITSIZEMOVE =>
+		{
+			app( |app| app.moving.set( false ) );
+
+			0
+		}
+
 		WM_CREATE =>
 		{
 			on_create( window );
@@ -1380,7 +1560,7 @@ unsafe extern "system" fn window_proc( window: HWND, message: u32, wparam: WPARA
 	}
 }
 
-// Fixed size: no resizing, no maximize
+// Fixed size: no resizing, no maximize. The title bar is part of the client area, the title stays for the taskbar
 fn create_window( class: &[u16] ) -> HWND
 {
 	let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN;
@@ -1389,9 +1569,11 @@ fn create_window( class: &[u16] ) -> HWND
 
 	unsafe { AdjustWindowRectExForDpi( &mut rect, style, 0, 0, app( |app| app.dpi.get() ) as u32 ) };
 
+	app( |app| app.caption.set( -rect.top ) );
+
 	let title  = wide( format!( "Hammer++ patcher for INFRA {}", install::VERSION ) );
 	let width  = rect.right - rect.left;
-	let height = rect.bottom - rect.top;
+	let height = rect.bottom;
 
 	unsafe { CreateWindowExW( 0, class.as_ptr(), title.as_ptr(), style, CW_USEDEFAULT, CW_USEDEFAULT, width, height, null_mut(), null_mut(), GetModuleHandleW( null() ), null() ) }
 }
@@ -1415,18 +1597,20 @@ fn run_message_loop( window: HWND )
 	}
 }
 
+fn load_icon( width: i32, height: i32 ) -> HICON
+{
+	unsafe { LoadImageW( GetModuleHandleW( null() ), APP_ICON, IMAGE_ICON, width, height, LR_DEFAULTCOLOR ) }
+}
+
 // At the size the metrics give for the DPI
 fn load_app_icon( width_metric: i32, height_metric: i32 ) -> HICON
 {
 	let dpi = app( |app| app.dpi.get() ) as u32;
 
-	unsafe
-	{
-		let width  = GetSystemMetricsForDpi( width_metric, dpi );
-		let height = GetSystemMetricsForDpi( height_metric, dpi );
+	let width  = unsafe { GetSystemMetricsForDpi( width_metric, dpi ) };
+	let height = unsafe { GetSystemMetricsForDpi( height_metric, dpi ) };
 
-		LoadImageW( GetModuleHandleW( null() ), APP_ICON, IMAGE_ICON, width, height, LR_DEFAULTCOLOR )
-	}
+	load_icon( width, height )
 }
 
 fn register_class( class: &[u16] )
@@ -1465,6 +1649,8 @@ fn startup()
 	app( |app| app.field.set( field ) );
 
 	gdiplus::startup();
+
+	unsafe { BufferedPaintInit() };
 }
 
 // GDI+ objects first, GDI+ itself after them
@@ -1472,6 +1658,8 @@ fn shutdown()
 {
 	avatar::clear();
 	gdiplus::shutdown();
+
+	unsafe { BufferedPaintUnInit() };
 
 	unsafe { CoUninitialize() };
 }

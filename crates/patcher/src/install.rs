@@ -75,7 +75,7 @@ fn is_hpp_build( entry: &std::fs::DirEntry ) -> bool
 	name.starts_with( "hammerplusplus_portal2_build" ) && hpp_bin( &entry.path() ).is_some()
 }
 
-// The newest hammerplusplus_portal2_buildNNNN next to the installer or in the current folder
+// The newest hammerplusplus_portal2_buildXXXX next to the installer or in the current folder
 pub fn find_hpp_build() -> Option<PathBuf>
 {
 	let exe_dir = std::env::current_exe().ok().and_then( |exe| exe.parent().map( Path::to_path_buf ) );

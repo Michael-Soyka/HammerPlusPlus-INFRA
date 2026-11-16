@@ -16,7 +16,7 @@ use windows_sys::Win32::Graphics::Gdi::{ BeginPaint, BitBlt, EndPaint, GetDC, HD
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Controls::WM_MOUSELEAVE;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{ GetFocus, SetFocus, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent, VK_ESCAPE, VK_RETURN };
-use windows_sys::Win32::UI::WindowsAndMessaging::{ CreateWindowExW, DLGC_WANTALLKEYS, DefWindowProcW, DestroyWindow, GetClientRect, GetCursorPos, HWND_TOP, IDC_ARROW, IDC_HAND, KillTimer, LoadCursorW, RegisterClassExW, SWP_NOMOVE, SWP_NOSIZE, SetCursor, SetTimer, SetWindowPos, WM_ERASEBKGND, WM_GETDLGCODE, WM_KEYDOWN, WM_LBUTTONDOWN, WM_MOUSEMOVE, WM_PAINT, WM_SETCURSOR, WM_TIMER, WNDCLASSEXW, WS_CHILD, WS_VISIBLE };
+use windows_sys::Win32::UI::WindowsAndMessaging::{ CreateWindowExW, DLGC_WANTALLKEYS, DefWindowProcW, DestroyWindow, GetClientRect, GetCursorPos, HTTRANSPARENT, HWND_TOP, IDC_ARROW, IDC_HAND, KillTimer, LoadCursorW, RegisterClassExW, SWP_NOMOVE, SWP_NOSIZE, SetCursor, SetTimer, SetWindowPos, WM_ERASEBKGND, WM_GETDLGCODE, WM_KEYDOWN, WM_LBUTTONDOWN, WM_MOUSEMOVE, WM_NCHITTEST, WM_PAINT, WM_SETCURSOR, WM_TIMER, WNDCLASSEXW, WS_CHILD, WS_VISIBLE };
 
 const CLASS: &str = "InfraHppModal";
 
@@ -308,7 +308,7 @@ fn draw_frame( dc: HDC, modal: &Modal )
 	gdi::dim( frame.dc, width, height, ( value * DIM_ALPHA ) as u8 );
 	modal.card.draw( frame.dc, &modal.card_rect( value ), modal.hovered );
 
-	unsafe { BitBlt( dc, 0, 0, width, height, frame.dc, 0, 0, SRCCOPY ) };
+	gdi::present( dc, &frame, &RECT { left: 0, top: 0, right: width, bottom: height }, ui::caption_buttons() );
 }
 
 //-----------------------------------------------------------------------------
@@ -405,6 +405,16 @@ fn on_mouse_leave( overlay: HWND )
 	set_hovered( overlay, None );
 }
 
+// The caption buttons of the window stay usable over the card
+fn is_over_caption_buttons( overlay: HWND, lparam: LPARAM ) -> bool
+{
+	let mut point = ui::lparam_point( lparam );
+
+	unsafe { ScreenToClient( overlay, &mut point ) };
+
+	ui::caption_buttons().is_some_and( |buttons| contains( &buttons, point ) )
+}
+
 // A hand over an item; false leaves the class arrow. Comes before WM_MOUSEMOVE, so the position is read here
 fn on_set_cursor( overlay: HWND ) -> bool
 {
@@ -486,6 +496,8 @@ unsafe extern "system" fn overlay_proc( overlay: HWND, message: u32, wparam: WPA
 
 			0
 		}
+
+		WM_NCHITTEST if is_over_caption_buttons( overlay, lparam ) => HTTRANSPARENT as LRESULT,
 
 		WM_SETCURSOR if on_set_cursor( overlay ) => 1,
 
