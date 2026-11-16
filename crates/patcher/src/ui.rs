@@ -7,7 +7,7 @@
 
 use crate::gdi::{ self, Canvas };
 use crate::palette::{ ACCENT, ACCENT_HOVER, ACCENT_PRESSED, BACKGROUND, BAD, BORDER, BUTTON, BUTTON_TEXT, DIM, FIELD, GOOD, HOVER, PRESSED, TEXT, WARNING };
-use crate::{ authors, avatar, background, gdiplus, install, steam };
+use crate::{ authors, avatar, background, gdiplus, install, modal, steam };
 use std::cell::{ Cell, RefCell };
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -937,10 +937,10 @@ fn render_scene()
 	);
 }
 
-// Paused under the authors card: it shows a snapshot of the window anyway
+// Paused under a card: it shows a snapshot of the window anyway
 fn on_background_tick()
 {
-	if authors::is_open() || !background::advance()
+	if modal::is_open() || !background::advance()
 	{
 		return;
 	}
@@ -1294,7 +1294,7 @@ pub fn run()
 	let class = wide( CLASS );
 
 	register_class( &class );
-	authors::register_class();
+	modal::register_class();
 
 	let window = create_window( &class );
 

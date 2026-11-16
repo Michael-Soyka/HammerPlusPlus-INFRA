@@ -12,6 +12,7 @@ mod background;
 mod gdi;
 mod gdiplus;
 mod install;
+mod modal;
 mod palette;
 mod pe;
 mod steam;
