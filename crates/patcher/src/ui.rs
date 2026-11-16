@@ -19,7 +19,7 @@ use std::ptr::{ null, null_mut };
 use std::time::{ Duration, Instant };
 use windows_sys::Win32::Foundation::{ COLORREF, HWND, LPARAM, LRESULT, MAX_PATH, POINT, RECT, WPARAM };
 use windows_sys::Win32::Graphics::Dwm::{ DWMWA_CAPTION_BUTTON_BOUNDS, DWMWA_USE_IMMERSIVE_DARK_MODE, DwmDefWindowProc, DwmExtendFrameIntoClientArea, DwmGetWindowAttribute, DwmSetWindowAttribute };
-use windows_sys::Win32::Graphics::Gdi::{ BeginPaint, CreateSolidBrush, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_PATH_ELLIPSIS, DT_SINGLELINE, DT_TOP, DT_VCENTER, DT_WORDBREAK, ClientToScreen, EndPaint, FW_NORMAL, FW_SEMIBOLD, GetDC, GetStockObject, HBRUSH, HDC, HFONT, InflateRect, InvalidateRect, MapWindowPoints, NULL_BRUSH, PAINTSTRUCT, ReleaseDC, ScreenToClient, SetBkColor, SetTextColor };
+use windows_sys::Win32::Graphics::Gdi::{ BeginPaint, CreateSolidBrush, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_PATH_ELLIPSIS, DT_SINGLELINE, DT_TOP, DT_VCENTER, DT_WORDBREAK, ClientToScreen, EndPaint, FW_NORMAL, FW_SEMIBOLD, GetDC, GetStockObject, HBRUSH, HDC, HFONT, InflateRect, InvalidateRect, MapWindowPoints, NULL_BRUSH, PAINTSTRUCT, ReleaseDC, SetBkColor, SetTextColor };
 use windows_sys::Win32::System::Com::{ COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoTaskMemFree, CoUninitialize };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Controls::{ BufferedPaintInit, BufferedPaintUnInit, DRAWITEMSTRUCT, EM_SETCUEBANNER, MARGINS, ODS_DISABLED, ODS_FOCUS, ODS_SELECTED, WM_MOUSELEAVE };
@@ -87,9 +87,6 @@ const HPP_SECTION_TOP: i32 = 150;
 
 // The app icon left of the title, in place of the window title bar
 const TITLE_ICON: Bounds = Bounds { x: 16, y: 18, width: 28, height: 28 };
-
-// Dragging by this strip moves the window
-const DRAG_HEIGHT: i32 = 56;
 
 const BACKGROUND_TIMER: usize = 1;
 
@@ -1389,7 +1386,8 @@ fn on_nc_calc_size( window: HWND, wparam: WPARAM, lparam: LPARAM ) -> LRESULT
 	0
 }
 
-// The title strip moves the window; the caption buttons are already answered by DwmDefWindowProc
+// Any free place moves the window: fields and buttons are child windows and answer for themselves.
+// The caption buttons are already answered by DwmDefWindowProc
 fn on_hit_test( window: HWND, lparam: LPARAM ) -> LRESULT
 {
 	let hit = unsafe { DefWindowProcW( window, WM_NCHITTEST, 0, lparam ) };
@@ -1399,16 +1397,7 @@ fn on_hit_test( window: HWND, lparam: LPARAM ) -> LRESULT
 		return hit;
 	}
 
-	let mut point = lparam_point( lparam );
-
-	unsafe { ScreenToClient( window, &mut point ) };
-
-	if point.y < scale( DRAG_HEIGHT )
-	{
-		return HTCAPTION as LRESULT;
-	}
-
-	hit
+	HTCAPTION as LRESULT
 }
 
 fn on_create( window: HWND )
