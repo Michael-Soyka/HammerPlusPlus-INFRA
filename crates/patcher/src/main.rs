@@ -15,6 +15,9 @@ mod install;
 mod modal;
 mod palette;
 mod pe;
+mod process;
+mod prompt;
+mod shortcut;
 mod steam;
 mod ui;
 

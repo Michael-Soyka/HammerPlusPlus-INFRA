@@ -7,7 +7,8 @@
 
 use crate::gdi::{ self, Canvas };
 use crate::palette::{ ACCENT, ACCENT_HOVER, ACCENT_PRESSED, BACKGROUND, BAD, BORDER, BUTTON, BUTTON_TEXT, DIM, FIELD, GOOD, HOVER, PRESSED, TEXT, WARNING };
-use crate::{ authors, avatar, background, gdiplus, install, modal, steam };
+use crate::prompt::{ self, Choice, Prompt };
+use crate::{ authors, avatar, background, gdiplus, install, modal, process, shortcut, steam };
 use std::cell::{ Cell, RefCell };
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -15,6 +16,7 @@ use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{ Path, PathBuf };
 use std::ptr::{ null, null_mut };
+use std::time::{ Duration, Instant };
 use windows_sys::Win32::Foundation::{ COLORREF, HWND, LPARAM, LRESULT, MAX_PATH, POINT, RECT, WPARAM };
 use windows_sys::Win32::Graphics::Dwm::{ DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute };
 use windows_sys::Win32::Graphics::Gdi::{ BeginPaint, CreateSolidBrush, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_PATH_ELLIPSIS, DT_SINGLELINE, DT_TOP, DT_VCENTER, DT_WORDBREAK, EndPaint, FW_NORMAL, FW_SEMIBOLD, GetDC, GetStockObject, HBRUSH, HDC, HFONT, InflateRect, InvalidateRect, MapWindowPoints, NULL_BRUSH, PAINTSTRUCT, ReleaseDC, SetBkColor, SetTextColor };
@@ -24,7 +26,7 @@ use windows_sys::Win32::UI::Controls::{ DRAWITEMSTRUCT, EM_SETCUEBANNER, ODS_DIS
 use windows_sys::Win32::UI::HiDpi::{ AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, GetDpiForSystem, GetSystemMetricsForDpi, SetProcessDpiAwarenessContext };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{ EnableWindow, SetFocus, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent };
 use windows_sys::Win32::UI::Shell::{ BFFM_INITIALIZED, BFFM_SETSELECTIONW, BIF_NEWDIALOGSTYLE, BIF_RETURNONLYFSDIRS, BROWSEINFOW, DefSubclassProc, DragAcceptFiles, DragFinish, DragQueryFileW, DragQueryPoint, HDROP, SHBrowseForFolderW, SHGetPathFromIDListW, SetWindowSubclass, ShellExecuteW };
-use windows_sys::Win32::UI::WindowsAndMessaging::{ BN_CLICKED, BS_OWNERDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DispatchMessageW, EN_CHANGE, ES_AUTOHSCROLL, GetClientRect, GetDlgCtrlID, GetDlgItem, GetMessageW, GetWindowTextLengthW, GetWindowTextW, HICON, IDC_ARROW, IDC_WAIT, IMAGE_ICON, IsDialogMessageW, LR_DEFAULTCOLOR, LoadCursorW, LoadImageW, MSG, PostQuitMessage, RegisterClassExW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_HIDE, SW_SHOW, SW_SHOWDEFAULT, SW_SHOWNORMAL, SendMessageW, SetCursor, SetTimer, SetWindowTextW, ShowWindow, TranslateMessage, WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_DESTROY, WM_DRAWITEM, WM_DROPFILES, WM_ERASEBKGND, WM_MOUSEMOVE, WM_PAINT, WM_SETFONT, WM_TIMER, WNDCLASSEXW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE };
+use windows_sys::Win32::UI::WindowsAndMessaging::{ BN_CLICKED, BS_OWNERDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DispatchMessageW, EN_CHANGE, ES_AUTOHSCROLL, GetClientRect, GetDlgCtrlID, GetDlgItem, GetMessageW, GetWindowTextLengthW, GetWindowTextW, HICON, IDC_ARROW, IDC_WAIT, IMAGE_ICON, IsDialogMessageW, KillTimer, LR_DEFAULTCOLOR, LoadCursorW, LoadImageW, MSG, PostQuitMessage, RegisterClassExW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_HIDE, SW_SHOW, SW_SHOWDEFAULT, SW_SHOWNORMAL, SendMessageW, SetCursor, SetTimer, SetWindowTextW, ShowWindow, TranslateMessage, WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_DESTROY, WM_DRAWITEM, WM_DROPFILES, WM_ERASEBKGND, WM_MOUSEMOVE, WM_PAINT, WM_SETFONT, WM_TIMER, WNDCLASSEXW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE };
 
 const DOWNLOAD_URL: &str = "https://ficool2.github.io/HammerPlusPlus-Website/download.html";
 const CLASS:        &str = "InfraHppSetup";
@@ -81,6 +83,32 @@ const INFO_RADIUS:   i32 = 9;
 const HPP_SECTION_TOP: i32 = 150;
 
 const BACKGROUND_TIMER: usize = 1;
+
+// Polls for Hammer++ to exit before Remove
+const CLOSE_TIMER:   usize = 2;
+const CLOSE_POLL_MS: u32 = 250;
+const CLOSE_TIMEOUT: Duration = Duration::from_secs( 30 );
+
+const SHORTCUT_PROMPT: Prompt = Prompt
+{
+	title:   "Create a desktop shortcut?",
+	text:    "There is no Hammer++ for INFRA shortcut on the desktop. It starts Hammer++ with INFRA without the patcher.",
+	choices: &[ Choice { text: "Create", accent: true }, Choice { text: "Not now", accent: false } ],
+	default: Some( CREATE_SHORTCUT ),
+};
+
+const CREATE_SHORTCUT: usize = 0;
+
+// No default: Enter must not close Hammer++
+const RUNNING_PROMPT: Prompt = Prompt
+{
+	title:   "Hammer++ is running",
+	text:    "Save your maps in Hammer++ first. It will be closed, then removed from INFRA.",
+	choices: &[ Choice { text: "Close and remove", accent: true }, Choice { text: "Cancel", accent: false } ],
+	default: None,
+};
+
+const CLOSE_AND_REMOVE: usize = 0;
 
 const LINE:      u32 = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS;
 const PATH_LINE: u32 = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX | DT_PATH_ELLIPSIS;
@@ -193,6 +221,14 @@ struct State
 	hpp: Option<PathBuf>,
 }
 
+// Remove waits for Hammer++ of this INFRA to exit
+#[ derive( Clone ) ]
+struct Closing
+{
+	game:  PathBuf,
+	start: Instant,
+}
+
 struct App
 {
 	window:     Cell<HWND>,
@@ -207,8 +243,9 @@ struct App
 	// The dimmed video frame under everything
 	scene: RefCell<Option<Canvas>>,
 
-	labels: RefCell<HashMap<i32, (String, COLORREF)>>,
-	state:  RefCell<State>,
+	labels:  RefCell<HashMap<i32, (String, COLORREF)>>,
+	state:   RefCell<State>,
+	closing: RefCell<Option<Closing>>,
 }
 
 thread_local!
@@ -224,6 +261,7 @@ thread_local!
 		scene:      RefCell::new( None ),
 		labels:     RefCell::new( HashMap::new() ),
 		state:      RefCell::new( State::default() ),
+		closing:    RefCell::new( None ),
 	};
 }
 
@@ -521,7 +559,7 @@ fn refresh_hpp()
 	update_buttons( &state() );
 }
 
-fn set_result( text: &str, color: COLORREF )
+pub fn set_result( text: &str, color: COLORREF )
 {
 	set_label( ID_RESULT, text, color );
 }
@@ -553,7 +591,41 @@ fn on_hpp_change()
 	refresh_hpp();
 }
 
-// Install and Reinstall: install() writes over a previous installation
+fn is_closing() -> bool
+{
+	app( |app| app.closing.borrow().is_some() )
+}
+
+fn create_shortcut( game: &Path )
+{
+	match shortcut::create( game )
+	{
+		Ok( file ) => set_result( &format!( "Shortcut created: {}", file.display() ), GOOD ),
+		Err( error ) => set_result( &error, BAD ),
+	}
+}
+
+// Only when this INFRA has no shortcut yet
+fn offer_shortcut( game: PathBuf )
+{
+	if shortcut::exists( &game )
+	{
+		return;
+	}
+
+	prompt::open(
+		SHORTCUT_PROMPT,
+		move |choice|
+		{
+			if choice == CREATE_SHORTCUT
+			{
+				create_shortcut( &game );
+			}
+		}
+	);
+}
+
+// Install and Reinstall: install() writes over a previous installation. Offers a shortcut after success
 fn on_install()
 {
 	let state = state();
@@ -563,9 +635,22 @@ fn on_install()
 		return;
 	};
 
+	if is_closing()
+	{
+		return;
+	}
+
 	unsafe { SetCursor( LoadCursorW( null_mut(), IDC_WAIT ) ) };
 
-	show_result( install::install( &game, &hpp ) );
+	let result    = install::install( &game, &hpp );
+	let installed = result.is_ok();
+
+	show_result( result );
+
+	if installed
+	{
+		offer_shortcut( game );
+	}
 }
 
 fn installed_game() -> Option<PathBuf>
@@ -575,6 +660,79 @@ fn installed_game() -> Option<PathBuf>
 	state.game.filter( |_| state.installed )
 }
 
+fn with_removed_shortcuts( message: String, removed: usize ) -> String
+{
+	if removed == 0
+	{
+		return message;
+	}
+
+	let text = format!( "{message}. Desktop shortcuts removed: {removed}" );
+
+	text
+}
+
+// Shortcuts are found while the launcher they point to is still there
+fn remove( game: &Path )
+{
+	let shortcuts = shortcut::find_own( game );
+	let result    = install::uninstall( game ).map( |message| with_removed_shortcuts( message, shortcut::remove( game, &shortcuts ) ) );
+
+	show_result( result );
+}
+
+fn running_hammer( game: &Path ) -> Vec<u32>
+{
+	process::running( &install::launcher_exe( game ) )
+}
+
+// Asks Hammer++ to close and waits for it on a timer: it may ask to save first
+fn close_and_remove( game: &Path )
+{
+	process::close( &running_hammer( game ) );
+
+	let closing = Closing { game: game.to_path_buf(), start: Instant::now() };
+
+	app( |app| app.closing.replace( Some( closing ) ) );
+
+	set_result( "Waiting for Hammer++ to close. If it asks to save, answer it there", WARNING );
+
+	unsafe { SetTimer( window(), CLOSE_TIMER, CLOSE_POLL_MS, None ) };
+}
+
+fn stop_closing()
+{
+	app( |app| app.closing.replace( None ) );
+
+	unsafe { KillTimer( window(), CLOSE_TIMER ) };
+}
+
+// Removes once Hammer++ exits; never kills it, so unsaved maps are not lost
+fn on_close_tick()
+{
+	let Some( closing ) = app( |app| app.closing.borrow().clone() ) else
+	{
+		stop_closing();
+
+		return;
+	};
+
+	if running_hammer( &closing.game ).is_empty()
+	{
+		stop_closing();
+		remove( &closing.game );
+
+		return;
+	}
+
+	if closing.start.elapsed() >= CLOSE_TIMEOUT
+	{
+		stop_closing();
+		set_result( "Hammer++ did not close, nothing was removed. Close it and press Remove again", BAD );
+	}
+}
+
+// A running Hammer++ of this INFRA is closed first, after the user saves their work
 fn on_remove()
 {
 	let Some( game ) = installed_game() else
@@ -582,7 +740,28 @@ fn on_remove()
 		return;
 	};
 
-	show_result( install::uninstall( &game ) );
+	if is_closing()
+	{
+		return;
+	}
+
+	if running_hammer( &game ).is_empty()
+	{
+		remove( &game );
+
+		return;
+	}
+
+	prompt::open(
+		RUNNING_PROMPT,
+		move |choice|
+		{
+			if choice == CLOSE_AND_REMOVE
+			{
+				close_and_remove( &game );
+			}
+		}
+	);
 }
 
 fn on_launch()
@@ -954,6 +1133,16 @@ fn on_background_tick()
 	}
 }
 
+fn on_timer( timer: usize )
+{
+	match timer
+	{
+		BACKGROUND_TIMER => on_background_tick(),
+		CLOSE_TIMER => on_close_tick(),
+		_ => {}
+	}
+}
+
 fn on_ctl_color( dc: HDC, text: COLORREF, background: COLORREF, brush: HBRUSH ) -> LRESULT
 {
 	unsafe
@@ -1163,7 +1352,7 @@ unsafe extern "system" fn window_proc( window: HWND, message: u32, wparam: WPARA
 
 		WM_TIMER =>
 		{
-			on_background_tick();
+			on_timer( wparam );
 
 			0
 		}
