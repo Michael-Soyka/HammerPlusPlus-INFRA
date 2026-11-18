@@ -27,7 +27,8 @@ const LEGACY_FILES: [&str; 4] =
 	"hammerplusplus_infra.cmd",
 ];
 
-pub const VERSION: &str = env!( "CARGO_PKG_VERSION" );
+// MAJOR.MINOR.BUILD.REVISION from build.rs, -git for GitHub Actions builds
+pub const VERSION: &str = env!( "INFRA_HPP_VERSION" );
 
 //-----------------------------------------------------------------------------
 // Folders
@@ -122,9 +123,14 @@ pub fn installed_version( game: &Path ) -> Option<String>
 	Some( version )
 }
 
+// Numbers only: a -git suffix does not make a build newer
 fn parse_version( version: &str ) -> Vec<u32>
 {
-	version.split( '.' ).map( |part| part.parse().unwrap_or( 0 ) ).collect()
+	let numbers = version.split( '-' ).next().unwrap_or_default();
+
+	let parts = numbers.split( '.' ).map( |part| part.parse().unwrap_or( 0 ) ).collect();
+
+	parts
 }
 
 pub fn compare_versions( left: &str, right: &str ) -> Ordering

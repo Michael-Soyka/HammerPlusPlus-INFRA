@@ -1,5 +1,7 @@
 [package]
 name = "infra_hpp_patcher"
+
+# MAJOR.MINOR by hand, BUILD.REVISION from the build time: see build.rs
 version = "0.1.0"
 edition = "2024"
 
