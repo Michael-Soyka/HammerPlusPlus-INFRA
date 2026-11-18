@@ -9,6 +9,7 @@ use crate::gdi::{ self, Canvas };
 use crate::palette::{ ACCENT, ACCENT_HOVER, ACCENT_PRESSED, BACKGROUND, BAD, BORDER, BUTTON, BUTTON_TEXT, DIM, FIELD, GOOD, HOVER, PRESSED, TEXT, WARNING };
 use crate::prompt::{ self, Choice, Prompt };
 use crate::icon::{ self, Icon };
+use crate::win10::Win10;
 use crate::{ authors, avatar, background, gdiplus, install, modal, picker, process, shortcut, steam };
 use std::cell::{ Cell, RefCell };
 use std::collections::HashMap;
@@ -16,17 +17,19 @@ use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{ Path, PathBuf };
 use std::ptr::{ null, null_mut };
-use std::time::{ Duration, Instant, SystemTime };
+use std::time::{ Instant, SystemTime };
 use windows_sys::Win32::Foundation::{ COLORREF, HWND, LPARAM, LRESULT, MAX_PATH, POINT, RECT, WPARAM };
 use windows_sys::Win32::Graphics::Dwm::{ DWMWA_CAPTION_BUTTON_BOUNDS, DWMWA_USE_IMMERSIVE_DARK_MODE, DwmDefWindowProc, DwmExtendFrameIntoClientArea, DwmGetWindowAttribute, DwmSetWindowAttribute };
 use windows_sys::Win32::Graphics::Gdi::{ BeginPaint, CreateSolidBrush, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE, DT_TOP, DT_VCENTER, DT_WORDBREAK, ClientToScreen, EndPaint, FW_NORMAL, FW_SEMIBOLD, GetDC, GetStockObject, HBRUSH, HDC, HFONT, InflateRect, InvalidateRect, MapWindowPoints, NULL_BRUSH, PAINTSTRUCT, ReleaseDC, SetBkColor, SetTextColor };
 use windows_sys::Win32::System::Com::{ COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Controls::{ BufferedPaintInit, BufferedPaintUnInit, DRAWITEMSTRUCT, EM_SETCUEBANNER, MARGINS, ODS_DISABLED, ODS_FOCUS, ODS_SELECTED, WM_MOUSELEAVE };
-use windows_sys::Win32::UI::HiDpi::{ AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, GetDpiForSystem, GetSystemMetricsForDpi, SetProcessDpiAwarenessContext };
+use windows_sys::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT_SYSTEM_AWARE;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{ EnableWindow, SetFocus, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent };
 use windows_sys::Win32::UI::Shell::{ DefSubclassProc, DragAcceptFiles, DragFinish, DragQueryFileW, DragQueryPoint, HDROP, SetWindowSubclass, ShellExecuteW };
-use windows_sys::Win32::UI::WindowsAndMessaging::{ BN_CLICKED, BS_OWNERDRAW, CW_USEDEFAULT, CreateWindowExW, DI_NORMAL, DefWindowProcW, DispatchMessageW, DrawIconEx, EN_CHANGE, ES_AUTOHSCROLL, GetClientRect, GetDlgCtrlID, GetDlgItem, GetMessageW, GetWindowRect, GetWindowTextLengthW, HTCAPTION, HTCLIENT, GetWindowTextW, HICON, IDC_ARROW, IDC_WAIT, IMAGE_ICON, IsDialogMessageW, KillTimer, LR_DEFAULTCOLOR, LoadCursorW, LoadImageW, MSG, NCCALCSIZE_PARAMS, PostQuitMessage, RegisterClassExW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_HIDE, SW_SHOW, SW_SHOWDEFAULT, SW_SHOWNORMAL, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SendMessageW, SetCursor, SetTimer, SetWindowPos, SetWindowTextW, ShowWindow, TranslateMessage, WM_ACTIVATE, WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_DESTROY, WM_DRAWITEM, WM_DROPFILES, WM_ENTERSIZEMOVE, WM_ERASEBKGND, WM_EXITSIZEMOVE, WM_MOUSEMOVE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SETFONT, WM_TIMER, WNDCLASSEXW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE };
+use windows_sys::Win32::UI::WindowsAndMessaging::{ BN_CLICKED, BS_OWNERDRAW, CW_USEDEFAULT, CreateWindowExW, DI_NORMAL, DefWindowProcW, DispatchMessageW, DrawIconEx, EN_CHANGE, ES_AUTOHSCROLL, GetClientRect, GetDlgCtrlID, GetDlgItem, GetMessageW, GetWindowRect, GetWindowTextLengthW, HTCAPTION, HTCLIENT, GetWindowTextW, HICON, IDC_ARROW, IDC_WAIT, IMAGE_ICON, IsDialogMessageW, KillTimer, LR_DEFAULTCOLOR, LoadCursorW, LoadImageW, MB_ICONERROR, MB_OK, MSG, MessageBoxW, NCCALCSIZE_PARAMS, PostQuitMessage, RegisterClassExW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_HIDE, SW_SHOW, SW_SHOWDEFAULT, SW_SHOWNORMAL, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SendMessageW, SetCursor, SetTimer, SetWindowPos, SetWindowTextW, ShowWindow, TranslateMessage, WM_ACTIVATE, WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_DESTROY, WM_DRAWITEM, WM_DROPFILES, WM_ENTERSIZEMOVE, WM_ERASEBKGND, WM_EXITSIZEMOVE, WM_MOUSEMOVE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SETFONT, WM_TIMER, WNDCLASSEXW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE };
+
+const UNSUPPORTED: &str = "This system is not supported: the window needs Windows 10 or later.\n\nUse the command line instead:\ninfra-hpp-patcher.exe --help";
 
 const DOWNLOAD_URL: &str = "https://ficool2.github.io/HammerPlusPlus-Website/download.html";
 const CLASS:        &str = "InfraHppSetup";
@@ -90,9 +93,7 @@ const TITLE_ICON: Bounds = Bounds { x: 16, y: 18, width: 28, height: 28 };
 const BACKGROUND_TIMER: usize = 1;
 
 // Polls for Hammer++ to exit before Remove
-const CLOSE_TIMER:   usize = 2;
-const CLOSE_POLL_MS: u32 = 250;
-const CLOSE_TIMEOUT: Duration = Duration::from_secs( 30 );
+const CLOSE_TIMER: usize = 2;
 
 const SHORTCUT_PROMPT: Prompt = Prompt
 {
@@ -415,7 +416,7 @@ pub fn shell_open( file: impl AsRef<OsStr>, args: Option<&str>, dir: Option<&Pat
 
 fn is_outdated( state: &State ) -> bool
 {
-	state.installed && state.version.as_deref().is_none_or( |version| install::compare_versions( version, install::VERSION ).is_lt() )
+	state.installed && install::is_older( state.version.as_deref() )
 }
 
 fn show_buttons( ids: &[i32], show: i32 )
@@ -642,36 +643,15 @@ fn installed_game() -> Option<PathBuf>
 	state.game.filter( |_| state.installed )
 }
 
-fn with_removed_shortcuts( message: String, removed: usize ) -> String
-{
-	if removed == 0
-	{
-		return message;
-	}
-
-	let text = format!( "{message}. Desktop shortcuts removed: {removed}" );
-
-	text
-}
-
-// Shortcuts are found while the launcher they point to is still there
 fn remove( game: &Path )
 {
-	let shortcuts = shortcut::find_own( game );
-	let result    = install::uninstall( game ).map( |message| with_removed_shortcuts( message, shortcut::remove( game, &shortcuts ) ) );
-
-	show_result( result );
-}
-
-fn running_hammer( game: &Path ) -> Vec<u32>
-{
-	process::running( &install::launcher_exe( game ) )
+	show_result( install::uninstall_with_shortcuts( game ) );
 }
 
 // Asks Hammer++ to close and waits for it on a timer: it may ask to save first
 fn close_and_remove( game: &Path )
 {
-	process::close( &running_hammer( game ) );
+	process::close( &install::running_hammer( game ) );
 
 	let closing = Closing { game: game.to_path_buf(), start: Instant::now() };
 
@@ -679,7 +659,7 @@ fn close_and_remove( game: &Path )
 
 	set_result( "Waiting for Hammer++ to close. If it asks to save, answer it there", WARNING );
 
-	unsafe { SetTimer( window(), CLOSE_TIMER, CLOSE_POLL_MS, None ) };
+	unsafe { SetTimer( window(), CLOSE_TIMER, process::CLOSE_POLL_MS, None ) };
 }
 
 fn stop_closing()
@@ -699,7 +679,7 @@ fn on_close_tick()
 		return;
 	};
 
-	if running_hammer( &closing.game ).is_empty()
+	if install::running_hammer( &closing.game ).is_empty()
 	{
 		stop_closing();
 		remove( &closing.game );
@@ -707,7 +687,7 @@ fn on_close_tick()
 		return;
 	}
 
-	if closing.start.elapsed() >= CLOSE_TIMEOUT
+	if closing.start.elapsed() >= process::CLOSE_TIMEOUT
 	{
 		stop_closing();
 		set_result( "Hammer++ did not close, nothing was removed. Close it and press Remove again", BAD );
@@ -727,7 +707,7 @@ fn on_remove()
 		return;
 	}
 
-	if running_hammer( &game ).is_empty()
+	if install::running_hammer( &game ).is_empty()
 	{
 		remove( &game );
 
@@ -749,7 +729,7 @@ fn on_remove()
 // A running Hammer++ holds its files: the update would stop halfway
 fn on_update( game: &Path )
 {
-	if !running_hammer( game ).is_empty()
+	if !install::running_hammer( game ).is_empty()
 	{
 		set_result( "Hammer++ is running: save your maps, close it and press Update again", BAD );
 
@@ -1519,13 +1499,13 @@ unsafe extern "system" fn window_proc( window: HWND, message: u32, wparam: WPARA
 }
 
 // Fixed size: no resizing, no maximize. The title bar is part of the client area, the title stays for the taskbar
-fn create_window( class: &[u16] ) -> HWND
+fn create_window( class: &[u16], win10: &Win10 ) -> HWND
 {
 	let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN;
 
 	let mut rect = RECT { left: 0, top: 0, right: scale( WIDTH ), bottom: scale( HEIGHT ) };
 
-	unsafe { AdjustWindowRectExForDpi( &mut rect, style, 0, 0, app( |app| app.dpi.get() ) as u32 ) };
+	win10.adjust_window_rect_ex_for_dpi( &mut rect, style, 0, app( |app| app.dpi.get() ) as u32 );
 
 	app( |app| app.caption.set( -rect.top ) );
 
@@ -1561,17 +1541,17 @@ fn load_icon( width: i32, height: i32 ) -> HICON
 }
 
 // At the size the metrics give for the DPI
-fn load_app_icon( width_metric: i32, height_metric: i32 ) -> HICON
+fn load_app_icon( win10: &Win10, width_metric: i32, height_metric: i32 ) -> HICON
 {
 	let dpi = app( |app| app.dpi.get() ) as u32;
 
-	let width  = unsafe { GetSystemMetricsForDpi( width_metric, dpi ) };
-	let height = unsafe { GetSystemMetricsForDpi( height_metric, dpi ) };
+	let width  = win10.get_system_metrics_for_dpi( width_metric, dpi );
+	let height = win10.get_system_metrics_for_dpi( height_metric, dpi );
 
 	load_icon( width, height )
 }
 
-fn register_class( class: &[u16] )
+fn register_class( class: &[u16], win10: &Win10 )
 {
 	let window_class = WNDCLASSEXW
 	{
@@ -1581,26 +1561,24 @@ fn register_class( class: &[u16] )
 		cbClsExtra:    0,
 		cbWndExtra:    0,
 		hInstance:     unsafe { GetModuleHandleW( null() ) },
-		hIcon:         load_app_icon( SM_CXICON, SM_CYICON ),
+		hIcon:         load_app_icon( win10, SM_CXICON, SM_CYICON ),
 		hCursor:       unsafe { LoadCursorW( null_mut(), IDC_ARROW ) },
 		hbrBackground: null_mut(),
 		lpszMenuName:  null(),
 		lpszClassName: class.as_ptr(),
-		hIconSm:       load_app_icon( SM_CXSMICON, SM_CYSMICON ),
+		hIconSm:       load_app_icon( win10, SM_CXSMICON, SM_CYSMICON ),
 	};
 
 	unsafe { RegisterClassExW( &window_class ) };
 }
 
-fn startup()
+fn startup( win10: &Win10 )
 {
-	unsafe
-	{
-		SetProcessDpiAwarenessContext( DPI_AWARENESS_CONTEXT_SYSTEM_AWARE );
-		CoInitializeEx( null(), ( COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE ) as u32 );
-	}
+	win10.set_process_dpi_awareness_context( DPI_AWARENESS_CONTEXT_SYSTEM_AWARE );
 
-	let dpi   = unsafe { GetDpiForSystem() } as i32;
+	unsafe { CoInitializeEx( null(), ( COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE ) as u32 ) };
+
+	let dpi   = win10.get_dpi_for_system() as i32;
 	let field = unsafe { CreateSolidBrush( FIELD ) };
 
 	app( |app| app.dpi.set( dpi ) );
@@ -1623,16 +1601,32 @@ fn shutdown()
 	unsafe { CoUninitialize() };
 }
 
+// Before Windows 10 the window does not start: it points to the command line
+fn show_unsupported()
+{
+	let title = wide( "Hammer++ patcher for INFRA" );
+	let text  = wide( UNSUPPORTED );
+
+	unsafe { MessageBoxW( null_mut(), text.as_ptr(), title.as_ptr(), MB_OK | MB_ICONERROR ) };
+}
+
 pub fn run()
 {
-	startup();
+	let Some( win10 ) = Win10::load() else
+	{
+		show_unsupported();
+
+		return;
+	};
+
+	startup( &win10 );
 
 	let class = wide( CLASS );
 
-	register_class( &class );
+	register_class( &class, &win10 );
 	modal::register_class();
 
-	let window = create_window( &class );
+	let window = create_window( &class, &win10 );
 
 	if !window.is_null()
 	{

@@ -6,6 +6,7 @@
 
 use std::ffi::OsStr;
 use std::path::Path;
+use std::time::Duration;
 use windows_sys::Win32::Foundation::{ CloseHandle, HWND, INVALID_HANDLE_VALUE, LPARAM };
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{ CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS };
 use windows_sys::Win32::System::Threading::{ OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW };
@@ -13,6 +14,10 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{ EnumWindows, GW_OWNER, GetWin
 
 // Long enough for any image path
 const PATH_LENGTH: usize = 32768;
+
+// After close(): how often to look and how long to wait for the processes to exit
+pub const CLOSE_POLL_MS: u32 = 250;
+pub const CLOSE_TIMEOUT: Duration = Duration::from_secs( 30 );
 
 fn from_wide( buffer: &[u16] ) -> String
 {

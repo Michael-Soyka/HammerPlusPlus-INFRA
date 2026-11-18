@@ -8,9 +8,15 @@ edition = "2024"
 [lints]
 workspace = true
 
+# The window, or the command line when started with arguments
 [[bin]]
 name = "infra-hpp-patcher"
 path = "src/main.rs"
+
+# The command line only: a console program, for scripts and for Windows before 10
+[[bin]]
+name = "infra-hpp-patcher-cli"
+path = "src/bin/cli.rs"
 
 [dependencies]
 image-webp = "0.2"
@@ -40,9 +46,12 @@ features = [
     "Win32_Graphics_GdiPlus",
     "Win32_System_Com",
     "Win32_System_Com_Urlmon",
+    "Win32_System_Console",
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_System_LibraryLoader",
     "Win32_System_Registry",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
     "Win32_System_Threading",
     "Win32_UI_Controls",
     "Win32_UI_HiDpi",

@@ -5,7 +5,7 @@
 //
 //=============================================================================//
 
-use crate::pe;
+use crate::{ pe, process, shortcut };
 use std::cmp::Ordering;
 use std::path::{ Path, PathBuf };
 use std::time::SystemTime;
@@ -137,6 +137,12 @@ fn parse_version( version: &str ) -> Vec<u32>
 pub fn compare_versions( left: &str, right: &str ) -> Ordering
 {
 	parse_version( left ).cmp( &parse_version( right ) )
+}
+
+// An installation without a version file is older than any patcher that writes one
+pub fn is_older( version: Option<&str> ) -> bool
+{
+	version.is_none_or( |version| compare_versions( version, VERSION ).is_lt() )
 }
 
 //-----------------------------------------------------------------------------
@@ -353,6 +359,32 @@ pub fn uninstall( game: &Path ) -> Result<String, String>
 	let message = format!( "Removed {removed} files. Hammer++ settings in bin\\hammerplusplus are kept" );
 
 	Ok( message )
+}
+
+fn with_removed_shortcuts( message: String, removed: usize ) -> String
+{
+	if removed == 0
+	{
+		return message;
+	}
+
+	let text = format!( "{message}. Desktop shortcuts removed: {removed}" );
+
+	text
+}
+
+// Shortcuts are found while the launcher they point to is still there
+pub fn uninstall_with_shortcuts( game: &Path ) -> Result<String, String>
+{
+	let shortcuts = shortcut::find_own( game );
+	let result    = uninstall( game ).map( |message| with_removed_shortcuts( message, shortcut::remove( game, &shortcuts ) ) );
+
+	result
+}
+
+pub fn running_hammer( game: &Path ) -> Vec<u32>
+{
+	process::running( &launcher_exe( game ) )
 }
 
 pub fn launcher_exe( game: &Path ) -> PathBuf
