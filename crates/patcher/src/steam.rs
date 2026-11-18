@@ -5,7 +5,7 @@
 //=============================================================================//
 
 use std::path::{ Path, PathBuf };
-use windows_sys::Win32::System::Registry::{ HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, REG_ROUTINE_FLAGS, RRF_RT_REG_SZ, RRF_SUBKEY_WOW6432KEY, RegGetValueW };
+use windows_sys::Win32::System::Registry::{ HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, REG_ROUTINE_FLAGS, RRF_RT_REG_SZ, RRF_SUBKEY_WOW6432KEY, RRF_SUBKEY_WOW6464KEY, RegGetValueW };
 
 const INFRA_APP_ID: &str = "251110";
 
@@ -55,7 +55,7 @@ fn registered_infra() -> Option<PathBuf>
 	let key = format!( "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App {INFRA_APP_ID}" );
 
 	let wow64  = || registry_string( HKEY_LOCAL_MACHINE, &key, "InstallLocation", RRF_SUBKEY_WOW6432KEY );
-	let native = || registry_string( HKEY_LOCAL_MACHINE, &key, "InstallLocation", 0 );
+	let native = || registry_string( HKEY_LOCAL_MACHINE, &key, "InstallLocation", RRF_SUBKEY_WOW6464KEY );
 
 	let path = wow64().or_else( native ).map( PathBuf::from );
 

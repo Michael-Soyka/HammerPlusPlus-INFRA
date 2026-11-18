@@ -35,11 +35,10 @@ Optionally, you can install the compatible with this patcher [Extra Dark](https:
 ## Building
 
 ```
-cargo build --release -p infra_hpp_adapter --target i686-pc-windows-msvc
-cargo build --release -p infra_hpp_patcher
+cargo build --release
 ```
 
-The result is `target\release\infra-hpp-patcher.exe` with the 32-bit `infra_hpp_adapter.dll` inside: the first command builds the adapter, the second embeds it into the patcher.
+The result is `target\i686-pc-windows-msvc\release\infra-hpp-patcher.exe` with `infra_hpp_adapter.dll` inside. Everything is 32-bit, as Hammer++ is: the target is set in `.cargo\config.toml`. The patcher build script builds the release adapter itself and embeds it.
 
 The patcher addresses are in [ADDRESSES.md](ADDRESSES.md).
 

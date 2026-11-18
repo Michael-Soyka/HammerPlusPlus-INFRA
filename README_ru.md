@@ -35,11 +35,10 @@
 ## Сборка
 
 ```
-cargo build --release -p infra_hpp_adapter --target i686-pc-windows-msvc
-cargo build --release -p infra_hpp_patcher
+cargo build --release
 ```
 
-На выходе `target\release\infra-hpp-patcher.exe`, внутри 32-битная `infra_hpp_adapter.dll`: первая команда собирает адаптер, вторая встраивает его в патчер.
+На выходе `target\i686-pc-windows-msvc\release\infra-hpp-patcher.exe`, внутри `infra_hpp_adapter.dll`. Всё собирается 32-битным, как и сам Hammer++: цель задана в `.cargo\config.toml`. Скрипт сборки патчера сам собирает release-версию адаптера и встраивает её.
 
 Адреса патчера — в [ADDRESSES.md](ADDRESSES.md).
 

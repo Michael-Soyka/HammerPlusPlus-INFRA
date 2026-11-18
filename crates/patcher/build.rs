@@ -1,14 +1,17 @@
 //=========== Copyright 2026 Michael Soyka, All rights reserved. ==============//
 //
-// Purpose: Embeds the release adapter, the app icon, the version and the Common Controls 6 manifest
+// Purpose: Builds and embeds the release adapter, the app icon, the version and the Common Controls 6 manifest
 //			into the installer
 //
 //=============================================================================//
 
 use std::path::PathBuf;
+use std::process::Command;
 use std::time::{ SystemTime, UNIX_EPOCH };
 
 const COMMON_CONTROLS: &str = "type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'";
+
+const ADAPTER_TARGET: &str = "i686-pc-windows-msvc";
 
 const SECONDS_PER_DAY: u64 = 86400;
 
@@ -27,16 +30,36 @@ fn target_dir() -> PathBuf
 	std::env::var_os( "CARGO_TARGET_DIR" ).map( PathBuf::from ).unwrap_or( workspace_dir().join( "target" ) )
 }
 
-fn embed_adapter()
+// Stable Cargo cannot depend on a cdylib: a nested cargo builds it into its own folder,
+// so it does not wait on the lock of this build
+fn build_adapter() -> PathBuf
 {
-	let adapter = target_dir().join( "i686-pc-windows-msvc" ).join( "release" ).join( "infra_hpp_adapter.dll" );
+	let target_dir = target_dir().join( "adapter" );
+	let cargo      = std::env::var_os( "CARGO" ).unwrap_or( "cargo".into() );
 
-	if !adapter.is_file()
+	let status = Command::new( cargo )
+		.args( [ "build", "--release", "-p", "infra_hpp_adapter", "--target", ADAPTER_TARGET, "--target-dir" ] )
+		.arg( &target_dir )
+		.current_dir( workspace_dir() )
+		.status()
+		.unwrap_or_else( |error| panic!( "cargo: {error}" ) );
+
+	if !status.success()
 	{
-		panic!( "{} is missing, build it first: cargo build --release -p infra_hpp_adapter --target i686-pc-windows-msvc", adapter.display() );
+		panic!( "infra_hpp_adapter failed to build" );
 	}
 
-	println!( "cargo:rerun-if-changed={}", adapter.display() );
+	let adapter = target_dir.join( ADAPTER_TARGET ).join( "release" ).join( "infra_hpp_adapter.dll" );
+
+	adapter
+}
+
+fn embed_adapter()
+{
+	let adapter = build_adapter();
+
+	println!( "cargo:rerun-if-changed={}", workspace_dir().join( "crates" ).join( "adapter" ).display() );
+	println!( "cargo:rerun-if-changed={}", workspace_dir().join( "Cargo.lock" ).display() );
 	println!( "cargo:rustc-env=INFRA_HPP_ADAPTER={}", adapter.display() );
 }
 
