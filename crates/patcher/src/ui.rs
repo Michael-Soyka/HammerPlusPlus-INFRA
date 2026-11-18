@@ -8,6 +8,7 @@
 use crate::gdi::{ self, Canvas };
 use crate::palette::{ ACCENT, ACCENT_HOVER, ACCENT_PRESSED, BACKGROUND, BAD, BORDER, BUTTON, BUTTON_TEXT, DIM, FIELD, GOOD, HOVER, PRESSED, TEXT, WARNING };
 use crate::prompt::{ self, Choice, Prompt };
+use crate::icon::{ self, Icon };
 use crate::{ authors, avatar, background, gdiplus, install, modal, picker, process, shortcut, steam };
 use std::cell::{ Cell, RefCell };
 use std::collections::HashMap;
@@ -68,7 +69,7 @@ struct Bounds
 
 // Path edits sit inside drawn rounded frames with a padding
 const GAME_FRAME:    Bounds = Bounds { x: 16, y: 104, width: 470, height: 32 };
-const HPP_FRAME:     Bounds = Bounds { x: 16, y: 172, width: 372, height: 32 };
+const HPP_FRAME:     Bounds = Bounds { x: 16, y: 172, width: 430, height: 32 };
 
 // Without the Download button, as wide as the INFRA field
 const HPP_WIDE_FRAME: Bounds = Bounds { width: GAME_FRAME.width, ..HPP_FRAME };
@@ -76,7 +77,9 @@ const FIELD_PADDING: i32 = 7;
 const FIELD_RADIUS:  i32 = 6;
 const FOCUS_RADIUS:  i32 = 5;
 const FOCUS_INSET:   i32 = 2;
-const INFO_RADIUS:   i32 = 9;
+
+// Icon buttons: no text drawn, the text stays for screen readers
+const ICON_BUTTONS: [(i32, Icon, i32); 2] = [ ( ID_HPP_DOWNLOAD, Icon::Download, 14 ), ( ID_INFO, Icon::Info, 16 ) ];
 
 // Files dropped below this line go to the Hammer++ field
 const HPP_SECTION_TOP: i32 = 144;
@@ -172,12 +175,12 @@ const CONTROLS: [Control; 9] =
 	edit( ID_GAME, GAME_FRAME ),
 	button( "Browse\u{2026}", ID_GAME_BROWSE, 494, 104, 90, 32 ),
 	edit( ID_HPP, HPP_FRAME ),
-	button( "Download", ID_HPP_DOWNLOAD, 396, 172, 90, 32 ),
+	button( "Download", ID_HPP_DOWNLOAD, 454, 172, 32, 32 ),
 	button( "Browse\u{2026}", ID_HPP_BROWSE, 494, 172, 90, 32 ),
 	button( "Install", ID_INSTALL, 444, 308, 140, 34 ),
 	button( "Remove", ID_REMOVE, 352, 308, 112, 34 ),
 	button( "Launch", ID_LAUNCH, 472, 308, 112, 34 ),
-	button( "i", ID_INFO, 16, 308, 34, 34 ),
+	button( "Info", ID_INFO, 16, 308, 34, 34 ),
 ];
 
 // Repainted on every frame: their rounded corners show the video
@@ -947,16 +950,18 @@ fn draw_button_focus( item: &DRAWITEMSTRUCT )
 	gdi::outline_round_rect( item.hDC, &focus, TEXT, FOCUS_RADIUS );
 }
 
-// The circle around the "i" of the info button
-fn draw_info_circle( item: &DRAWITEMSTRUCT )
+fn draw_button_content( item: &DRAWITEMSTRUCT )
 {
-	let rect     = item.rcItem;
-	let center_x = ( rect.left + rect.right ) / 2;
-	let center_y = ( rect.top + rect.bottom ) / 2;
-	let radius   = scale( INFO_RADIUS );
-	let circle   = RECT { left: center_x - radius, top: center_y - radius, right: center_x + radius, bottom: center_y + radius };
+	let icon = ICON_BUTTONS.iter().find( |( id, _, _ )| *id == item.CtlID as i32 );
 
-	gdi::outline_round_rect( item.hDC, &circle, BUTTON_TEXT, 2 * INFO_RADIUS );
+	if let Some( &( _, icon, size ) ) = icon
+	{
+		icon::draw( item.hDC, &item.rcItem, icon, scale( size ) );
+
+		return;
+	}
+
+	draw_button_text( item );
 }
 
 fn draw_button( item: &DRAWITEMSTRUCT, window_x: i32, window_y: i32 )
@@ -973,12 +978,7 @@ fn draw_button( item: &DRAWITEMSTRUCT, window_x: i32, window_y: i32 )
 	copy_scene( item.hDC, &item.rcItem, window_x, window_y );
 
 	gdi::fill_round_rect( item.hDC, &item.rcItem, fill, edge, FIELD_RADIUS );
-	draw_button_text( item );
-
-	if item.CtlID as i32 == ID_INFO
-	{
-		draw_info_circle( item );
-	}
+	draw_button_content( item );
 
 	if ( item.itemState & ODS_FOCUS ) != 0
 	{
@@ -1615,6 +1615,7 @@ fn startup()
 fn shutdown()
 {
 	avatar::clear();
+	icon::clear();
 	gdiplus::shutdown();
 
 	unsafe { BufferedPaintUnInit() };

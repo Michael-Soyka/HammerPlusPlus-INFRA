@@ -11,6 +11,7 @@ mod avatar;
 mod background;
 mod gdi;
 mod gdiplus;
+mod icon;
 mod install;
 mod modal;
 mod palette;

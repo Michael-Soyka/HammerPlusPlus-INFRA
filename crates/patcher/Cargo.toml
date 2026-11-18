@@ -16,6 +16,9 @@ path = "src/main.rs"
 image-webp = "0.2"
 memchr     = "2"
 
+# The button icons: paths only, no text or embedded images
+resvg = { version = "0.50", default-features = false }
+
 # IShellLinkW and IPersistFile for the desktop shortcut: windows-sys has no COM interfaces
 [dependencies.windows]
 version = "0.62"

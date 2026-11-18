@@ -11,11 +11,12 @@ use std::path::Path;
 use std::ptr::{ null, null_mut };
 use windows_sys::Win32::Foundation::COLORREF;
 use windows_sys::Win32::Graphics::Gdi::HDC;
-use windows_sys::Win32::Graphics::GdiPlus::{ GdipCreateBitmapFromFile, GdipCreateBitmapFromScan0, GdipCreateBitmapFromStream, GdipCreateFromHDC, GdipCreatePen1, GdipCreateSolidFill, GdipDeleteBrush, GdipDeleteGraphics, GdipDeletePen, GdipDisposeImage, GdipGetImageGraphicsContext, GdipSetPenEndCap, GdipSetPenStartCap, GdiplusShutdown, GdiplusStartup, GdiplusStartupInput, GpBitmap, GpBrush, GpGraphics, GpPen, LineCapRound, Status, UnitPixel };
+use windows_sys::Win32::Graphics::GdiPlus::{ GdipCreateBitmapFromFile, GdipCreateBitmapFromScan0, GdipCreateBitmapFromStream, GdipCreateFromHDC, GdipCreatePen1, GdipCreateSolidFill, GdipDeleteBrush, GdipDeleteGraphics, GdipDeletePen, GdipDisposeImage, GdipDrawImageRectI, GdipGetImageGraphicsContext, GdipSetPenEndCap, GdipSetPenStartCap, GdiplusShutdown, GdiplusStartup, GdiplusStartupInput, GpBitmap, GpBrush, GpGraphics, GpPen, LineCapRound, Status, UnitPixel };
 use windows_sys::Win32::UI::Shell::SHCreateMemStream;
 use windows_sys::core::IUnknown_Vtbl;
 
-const PIXEL_FORMAT_32BPP_ARGB: i32 = 0x0026_200A;
+const PIXEL_FORMAT_32BPP_ARGB:  i32 = 0x0026_200A;
+const PIXEL_FORMAT_32BPP_PARGB: i32 = 0x000E_200B;
 const OK:                      Status = 0;
 
 //-----------------------------------------------------------------------------
@@ -221,4 +222,20 @@ pub fn blank( width: i32, height: i32 ) -> Option<Bitmap>
 	let status = unsafe { GdipCreateBitmapFromScan0( width, height, 0, PIXEL_FORMAT_32BPP_ARGB, null(), &mut bitmap ) };
 
 	owned_bitmap( status, bitmap )
+}
+
+// Premultiplied BGRA rows, copied: a bitmap made over them would not own them
+pub fn from_pixels( width: i32, height: i32, pixels: &[u8] ) -> Option<Bitmap>
+{
+	let mut view = null_mut();
+
+	let status = unsafe { GdipCreateBitmapFromScan0( width, height, 4 * width, PIXEL_FORMAT_32BPP_PARGB, pixels.as_ptr(), &mut view ) };
+
+	let view     = owned_bitmap( status, view )?;
+	let copy     = blank( width, height )?;
+	let graphics = Graphics::from_bitmap( &copy );
+
+	unsafe { GdipDrawImageRectI( graphics.0, view.0.cast(), 0, 0, width, height ) };
+
+	Some( copy )
 }
