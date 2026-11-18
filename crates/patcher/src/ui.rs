@@ -6,7 +6,7 @@
 //=============================================================================//
 
 use crate::gdi::{ self, Canvas };
-use crate::palette::{ ACCENT, ACCENT_HOVER, ACCENT_PRESSED, BACKGROUND, BAD, BORDER, BUTTON, BUTTON_TEXT, DIM, FIELD, GOOD, HOVER, INVALID, PRESSED, TEXT, WARNING };
+use crate::palette::{ ACCENT, ACCENT_HOVER, ACCENT_PRESSED, BACKGROUND, BAD, BORDER, BUTTON, BUTTON_TEXT, DIM, FIELD, GOOD, HOVER, PRESSED, TEXT, WARNING };
 use crate::prompt::{ self, Choice, Prompt };
 use crate::{ authors, avatar, background, gdiplus, install, modal, picker, process, shortcut, steam };
 use std::cell::{ Cell, RefCell };
@@ -492,10 +492,10 @@ fn refresh_hpp()
 	let valid = check.is_some_and( |check| check.is_ok() );
 	let hpp   = bin.filter( |_| valid );
 
-	// No valid build in the field: the button comes back and stays
-	if hpp.is_none() && is_download_hidden()
+	// A valid build in the field takes the place of the button
+	if hpp.is_some() != is_download_hidden()
 	{
-		show_download( true );
+		show_download( hpp.is_none() );
 	}
 
 	update_state( |state| state.hpp = hpp );
@@ -999,7 +999,7 @@ fn draw_labels( dc: HDC )
 	}
 }
 
-// Grey while empty, green for a checked path, orange for a wrong one
+// Grey while empty, green for a checked path, red for a wrong one
 fn field_edge( id: i32, valid: bool ) -> COLORREF
 {
 	if valid
@@ -1012,7 +1012,7 @@ fn field_edge( id: i32, valid: bool ) -> COLORREF
 		return BORDER;
 	}
 
-	INVALID
+	BAD
 }
 
 fn on_paint()
@@ -1204,7 +1204,7 @@ fn add_controls()
 	}
 }
 
-// The build next to the installer needs no download: its field takes the place of the button
+// A found build needs no download: its field takes the place of the button
 fn show_download( shown: bool )
 {
 	let mut frame = HPP_WIDE_FRAME;
@@ -1253,11 +1253,6 @@ fn fill_fields()
 	else
 	{
 		refresh_hpp();
-	}
-
-	if state().hpp.is_some()
-	{
-		show_download( false );
 	}
 }
 
