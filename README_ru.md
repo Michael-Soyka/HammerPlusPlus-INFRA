@@ -18,6 +18,8 @@
 <img width="1920" height="1070" alt="image" src=".github/images/INFRA.png" />
 <p align="center">Hammer++ - INFRA</p>
 
+[Дизайн на Figma](https://www.figma.com/design/zUpakDBp6vfcbPzCPseVBF/Source-Mini-Tools?node-id=0-1&t=rR9ijBfBiP36KZYt-1)
+
 ## Требования
 
 ### Общие
@@ -45,5 +47,5 @@ cargo build --release -p infra_hpp_patcher
 
 - Loiste Interactive - Создатели [INFRA](https://loisteinteractive.com)
 - Ficool2 - Создатель [Hammer++](https://ficool2.github.io/HammerPlusPlus-Website/) :blue_heart:
-- Michael Soyka (Moon-6) - Структура, основные моменты, тесты
+- Michael Soyka (Moon-6) - Структура, основные моменты, дизайн, тесты
 - Claude - Основной код патчера

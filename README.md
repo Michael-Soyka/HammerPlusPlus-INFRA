@@ -18,6 +18,8 @@ Optionally, you can install the compatible with this patcher [Extra Dark](https:
 <img width="1920" height="1070" alt="image" src=".github/images/INFRA.png" />
 <p align="center">Hammer++ - INFRA</p>
 
+[Design on Figma](https://www.figma.com/design/zUpakDBp6vfcbPzCPseVBF/Source-Mini-Tools?node-id=0-1&t=rR9ijBfBiP36KZYt-1)
+
 ## Requirements
 
 ### General
@@ -45,5 +47,5 @@ The patcher addresses are in [ADDRESSES.md](ADDRESSES.md).
 
 - Loiste Interactive - Creators of [INFRA](https://loisteinteractive.com)
 - Ficool2 - Creator of the [Hammer++](https://ficool2.github.io/HammerPlusPlus-Website/) :blue_heart:
-- Michael Soyka (Moon-6) - Structure, proj direction, tests
+- Michael Soyka (Moon-6) - Structure, proj direction, design, tests
 - Claude - General patcher code

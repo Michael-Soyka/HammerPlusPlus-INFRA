@@ -15,6 +15,7 @@ mod install;
 mod modal;
 mod palette;
 mod pe;
+mod picker;
 mod process;
 mod prompt;
 mod shortcut;

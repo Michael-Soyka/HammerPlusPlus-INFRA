@@ -26,3 +26,4 @@ pub const DIM:            COLORREF = rgb( 128, 128, 128 );
 pub const GOOD:           COLORREF = rgb( 110, 190, 110 );
 pub const BAD:            COLORREF = rgb( 230, 95, 95 );
 pub const WARNING:        COLORREF = rgb( 220, 190, 90 );
+pub const INVALID:        COLORREF = rgb( 230, 140, 60 );
