@@ -4,6 +4,8 @@
 //
 //=============================================================================//
 
+use memchr::memmem;
+
 const NT_HEADERS_OFFSET: usize = 0x3c;
 const MACHINE_X86:       u16 = 0x14c;
 
@@ -55,16 +57,12 @@ impl Pe
 
 pub fn find_all( data: &[u8], needle: &[u8] ) -> Vec<usize>
 {
-	let positions = data.windows( needle.len() )
-		.enumerate()
-		.filter( |( _, window )| *window == needle )
-		.map( |( position, _ )| position )
-		.collect();
+	let positions = memmem::find_iter( data, needle ).collect();
 
 	positions
 }
 
 pub fn contains( data: &[u8], needle: &[u8] ) -> bool
 {
-	data.windows( needle.len() ).any( |window| window == needle )
+	memmem::find( data, needle ).is_some()
 }

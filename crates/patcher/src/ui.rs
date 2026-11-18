@@ -15,7 +15,7 @@ use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{ Path, PathBuf };
 use std::ptr::{ null, null_mut };
-use std::time::{ Duration, Instant };
+use std::time::{ Duration, Instant, SystemTime };
 use windows_sys::Win32::Foundation::{ COLORREF, HWND, LPARAM, LRESULT, MAX_PATH, POINT, RECT, WPARAM };
 use windows_sys::Win32::Graphics::Dwm::{ DWMWA_CAPTION_BUTTON_BOUNDS, DWMWA_USE_IMMERSIVE_DARK_MODE, DwmDefWindowProc, DwmExtendFrameIntoClientArea, DwmGetWindowAttribute, DwmSetWindowAttribute };
 use windows_sys::Win32::Graphics::Gdi::{ BeginPaint, CreateSolidBrush, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE, DT_TOP, DT_VCENTER, DT_WORDBREAK, ClientToScreen, EndPaint, FW_NORMAL, FW_SEMIBOLD, GetDC, GetStockObject, HBRUSH, HDC, HFONT, InflateRect, InvalidateRect, MapWindowPoints, NULL_BRUSH, PAINTSTRUCT, ReleaseDC, SetBkColor, SetTextColor };
@@ -213,6 +213,14 @@ struct State
 	hpp: Option<PathBuf>,
 }
 
+// The last checked build: typing over the same folder does not read it again
+struct Checked
+{
+	bin:   PathBuf,
+	stamp: [SystemTime; 2],
+	valid: bool,
+}
+
 // Remove waits for Hammer++ of this INFRA to exit
 #[ derive( Clone ) ]
 struct Closing
@@ -248,6 +256,7 @@ struct App
 
 	labels:  RefCell<HashMap<i32, (String, COLORREF)>>,
 	state:   RefCell<State>,
+	checked: RefCell<Option<Checked>>,
 	closing: RefCell<Option<Closing>>,
 }
 
@@ -268,6 +277,7 @@ thread_local!
 		scene:      RefCell::new( None ),
 		labels:     RefCell::new( HashMap::new() ),
 		state:      RefCell::new( State::default() ),
+		checked:    RefCell::new( None ),
 		closing:    RefCell::new( None ),
 	};
 }
@@ -483,13 +493,32 @@ fn refresh_game()
 	invalidate_frame( GAME_FRAME );
 }
 
+fn is_valid_build( bin: &Path ) -> bool
+{
+	let Some( stamp ) = install::build_stamp( bin ) else
+	{
+		return false;
+	};
+
+	let cached = app( |app| app.checked.borrow().as_ref().filter( |checked| checked.bin == bin && checked.stamp == stamp ).map( |checked| checked.valid ) );
+
+	if let Some( valid ) = cached
+	{
+		return valid;
+	}
+
+	let valid = install::validate_build( bin ).is_ok();
+
+	app( |app| app.checked.replace( Some( Checked { bin: bin.to_path_buf(), stamp, valid } ) ) );
+
+	valid
+}
+
 fn refresh_hpp()
 {
 	let input = field_text( ID_HPP );
 	let bin   = install::hpp_bin( Path::new( &input ) );
-	let check = bin.as_deref().map( install::validate_build );
-
-	let valid = check.is_some_and( |check| check.is_ok() );
+	let valid = bin.as_deref().is_some_and( is_valid_build );
 	let hpp   = bin.filter( |_| valid );
 
 	// A valid build in the field takes the place of the button

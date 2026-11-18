@@ -8,6 +8,7 @@
 use crate::pe;
 use std::cmp::Ordering;
 use std::path::{ Path, PathBuf };
+use std::time::SystemTime;
 
 const DLL_PATH:     &[u8] = b"hammerplusplus/bin/hammerplusplus_dll.dll";
 const ADAPTER_PATH: &[u8] = b"hammerplusplus/bin/infra_hpp_adapter.dll";
@@ -164,9 +165,14 @@ fn validate_launcher( bin: &Path ) -> Result<(), String>
 	Ok( () )
 }
 
+fn hpp_dll( bin: &Path ) -> PathBuf
+{
+	bin.join( "hammerplusplus" ).join( "bin" ).join( "hammerplusplus_dll.dll" )
+}
+
 fn validate_dll( bin: &Path ) -> Result<(), String>
 {
-	let dll = read_file( &bin.join( "hammerplusplus" ).join( "bin" ).join( "hammerplusplus_dll.dll" ) )?;
+	let dll = read_file( &hpp_dll( bin ) )?;
 
 	if !pe::contains( &dll, b"Release_PORTAL2" ) || !pe::contains( &dll, b"Hammer002" )
 	{
@@ -180,6 +186,16 @@ pub fn validate_build( bin: &Path ) -> Result<(), String>
 {
 	validate_launcher( bin )?;
 	validate_dll( bin )
+}
+
+// Changes when either checked file is replaced
+pub fn build_stamp( bin: &Path ) -> Option<[SystemTime; 2]>
+{
+	let modified = |path: PathBuf| std::fs::metadata( path ).and_then( |meta| meta.modified() ).ok();
+
+	let stamp = [ modified( bin.join( "hammerplusplus.exe" ) )?, modified( hpp_dll( bin ) )? ];
+
+	Some( stamp )
 }
 
 fn validate_adapter() -> Result<(), String>
