@@ -39,7 +39,7 @@ const AUTHORS: [Author; 3] =
 	Author
 	{
 		login:    "loiste-interactive",
-		avatar:   include_bytes!( "../assets/loiste.png" ),
+		avatar:   include_bytes!( "../assets/authors/user-github-logo-loiste.png" ),
 		download: false,
 		name:     "Loiste Interactive",
 		role:     "Creators of INFRA",
@@ -50,7 +50,7 @@ const AUTHORS: [Author; 3] =
 	Author
 	{
 		login:    "ficool2",
-		avatar:   include_bytes!( "../assets/34815548.png" ),
+		avatar:   include_bytes!( "../assets/authors/user-github-logo-34815548.png" ),
 		download: true,
 		name:     "Ficool2",
 		role:     "Creator of Hammer++",
@@ -61,7 +61,7 @@ const AUTHORS: [Author; 3] =
 	Author
 	{
 		login:    "Michael-Soyka",
-		avatar:   include_bytes!( "../assets/45078459.png" ),
+		avatar:   include_bytes!( "../assets/authors/user-github-logo-45078459.png" ),
 		download: true,
 		name:     "Michael Soyka (Moon-6)",
 		role:     "Structure, project direction, tests",
