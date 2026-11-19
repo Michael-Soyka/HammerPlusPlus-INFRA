@@ -16,23 +16,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The adapter is a 32-bit DLL, the patcher a 64-bit exe
+      # Both the adapter and the patcher are 32-bit (.cargo/config.toml)
       - name: Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: i686-pc-windows-msvc
 
-      # The patcher embeds the adapter, so the adapter goes first
+      # build.rs of the patcher builds and embeds the adapter itself
       - name: Build
-        run: |
-          cargo build --release --locked -p infra_hpp_adapter --target i686-pc-windows-msvc
-          cargo build --release --locked -p infra_hpp_patcher
+        run: cargo build --release --locked -p infra_hpp_patcher
 
       - name: Stage
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist | Out-Null
-          Copy-Item target/release/infra-hpp-patcher.exe, README.md, README_ru.md dist
+          Copy-Item target/i686-pc-windows-msvc/release/infra-hpp-patcher.exe, README.md, README_ru.md dist
 
       - name: Upload
         uses: actions/upload-artifact@v4
