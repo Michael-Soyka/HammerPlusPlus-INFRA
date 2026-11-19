@@ -98,7 +98,7 @@ const CLOSE_TIMER: usize = 2;
 const SHORTCUT_PROMPT: Prompt = Prompt
 {
 	title:   "Create a desktop shortcut?",
-	text:    "There is no Hammer++ for INFRA shortcut on the desktop. It starts Hammer++ with INFRA without the patcher.",
+	text:    "There is no Hammer++ for INFRA shortcut on the desktop. It makes it easier to start Hammer++ for INFRA.",
 	choices: &[ Choice { text: "Create", accent: true }, Choice { text: "Not now", accent: false } ],
 	default: Some( CREATE_SHORTCUT ),
 };
