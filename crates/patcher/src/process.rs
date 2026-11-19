@@ -16,7 +16,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{ EnumWindows, GW_OWNER, GetWin
 const PATH_LENGTH: usize = 32768;
 
 // After close(): how often to look and how long to wait for the processes to exit
-pub const CLOSE_POLL_MS: u32 = 250;
+pub const CLOSE_POLL_MS: u32 = 100;
 pub const CLOSE_TIMEOUT: Duration = Duration::from_secs( 30 );
 
 fn from_wide( buffer: &[u16] ) -> String

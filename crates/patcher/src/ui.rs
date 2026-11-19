@@ -92,7 +92,7 @@ const TITLE_ICON: Bounds = Bounds { x: 16, y: 18, width: 28, height: 28 };
 
 const BACKGROUND_TIMER: usize = 1;
 
-// Polls for Hammer++ to exit before Remove
+// Polls for Hammer++ to exit before Remove and Update
 const CLOSE_TIMER: usize = 2;
 
 const SHORTCUT_PROMPT: Prompt = Prompt
@@ -115,6 +115,17 @@ const RUNNING_PROMPT: Prompt = Prompt
 };
 
 const CLOSE_AND_REMOVE: usize = 0;
+
+// No default: Enter must not close Hammer++
+const UPDATE_PROMPT: Prompt = Prompt
+{
+	title:   "Hammer++ is running",
+	text:    "Save your maps in Hammer++ first. It will be closed, then updated.",
+	choices: &[ Choice { text: "Close and update", accent: true }, Choice { text: "Cancel", accent: false } ],
+	default: None,
+};
+
+const CLOSE_AND_UPDATE: usize = 0;
 
 const LINE:      u32 = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS;
 const PARAGRAPH: u32 = DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX;
@@ -225,12 +236,20 @@ struct Checked
 	valid: bool,
 }
 
-// Remove waits for Hammer++ of this INFRA to exit
+#[ derive( Clone, Copy ) ]
+enum AfterClose
+{
+	Remove,
+	Update,
+}
+
+// Remove and Update wait for Hammer++ of this INFRA to exit
 #[ derive( Clone ) ]
 struct Closing
 {
 	game:  PathBuf,
 	start: Instant,
+	then:  AfterClose,
 }
 
 struct App
@@ -649,11 +668,11 @@ fn remove( game: &Path )
 }
 
 // Asks Hammer++ to close and waits for it on a timer: it may ask to save first
-fn close_and_remove( game: &Path )
+fn close_hammer( game: &Path, then: AfterClose )
 {
 	process::close( &install::running_hammer( game ) );
 
-	let closing = Closing { game: game.to_path_buf(), start: Instant::now() };
+	let closing = Closing { game: game.to_path_buf(), start: Instant::now(), then };
 
 	app( |app| app.closing.replace( Some( closing ) ) );
 
@@ -669,7 +688,7 @@ fn stop_closing()
 	unsafe { KillTimer( window(), CLOSE_TIMER ) };
 }
 
-// Removes once Hammer++ exits; never kills it, so unsaved maps are not lost
+// Removes or updates once Hammer++ exits; never kills it, so unsaved maps are not lost
 fn on_close_tick()
 {
 	let Some( closing ) = app( |app| app.closing.borrow().clone() ) else
@@ -682,7 +701,12 @@ fn on_close_tick()
 	if install::running_hammer( &closing.game ).is_empty()
 	{
 		stop_closing();
-		remove( &closing.game );
+
+		match closing.then
+		{
+			AfterClose::Remove => remove( &closing.game ),
+			AfterClose::Update => on_install(),
+		}
 
 		return;
 	}
@@ -690,7 +714,14 @@ fn on_close_tick()
 	if closing.start.elapsed() >= process::CLOSE_TIMEOUT
 	{
 		stop_closing();
-		set_result( "Hammer++ did not close, nothing was removed. Close it and press Remove again", BAD );
+
+		let message = match closing.then
+		{
+			AfterClose::Remove => "Hammer++ did not close, nothing was removed. Close it and press Remove again",
+			AfterClose::Update => "Hammer++ did not close, nothing was updated. Close it and press Update again",
+		};
+
+		set_result( message, BAD );
 	}
 }
 
@@ -720,23 +751,39 @@ fn on_remove()
 		{
 			if choice == CLOSE_AND_REMOVE
 			{
-				close_and_remove( &game );
+				close_hammer( &game, AfterClose::Remove );
 			}
 		}
 	);
 }
 
-// A running Hammer++ holds its files: the update would stop halfway
+// A running Hammer++ holds its files: it is closed first, after the user saves their work
 fn on_update( game: &Path )
 {
-	if !install::running_hammer( game ).is_empty()
+	if is_closing()
 	{
-		set_result( "Hammer++ is running: save your maps, close it and press Update again", BAD );
+		return;
+	}
+
+	if install::running_hammer( game ).is_empty()
+	{
+		on_install();
 
 		return;
 	}
 
-	on_install();
+	let game = game.to_path_buf();
+
+	prompt::open(
+		UPDATE_PROMPT,
+		move |choice|
+		{
+			if choice == CLOSE_AND_UPDATE
+			{
+				close_hammer( &game, AfterClose::Update );
+			}
+		}
+	);
 }
 
 // Launch, or Update for an installation older than this patcher
