@@ -10,7 +10,7 @@
 
 1. Установите [INFRA](https://store.steampowered.com/app/251110/INFRA/);
 2. Скачайте [Hammer++ для Portal 2](https://ficool2.github.io/HammerPlusPlus-Website/download.html) и распакуйте его рядом с патчером;
-3. Запустите **infra-hpp-patcher.exe** (если игра установлена, а папка Hammer++ для Portal 2 лежит рядом с патчером, они подставятся автоматически, иначе укажите их вручную или перетащите на строку ввода пути);
+3. Скачайте [патчера](https://github.com/Michael-Soyka/HammerPlusPlus-INFRA/releases/latest) и запустите **infra-hpp-patcher.exe** (если игра установлена, а папка Hammer++ для Portal 2 лежит рядом с патчером, они подставятся автоматически, иначе укажите их вручную или перетащите на строку ввода пути);
 4. Нажмите **Install**;
 
 ### CLI
