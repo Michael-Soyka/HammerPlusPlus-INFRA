@@ -1,0 +1,7 @@
+# Hammer++ is 32-bit only: the adapter must be, the patcher may as well
+[build]
+target = "i686-pc-windows-msvc"
+
+# The C runtime inside the exe: Windows 8 and 8.1 may have no Visual C++ Redistributable
+[target.i686-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

@@ -5,9 +5,10 @@
 //
 //=============================================================================//
 
-use crate::pe;
+use crate::{ pe, process, shortcut };
 use std::cmp::Ordering;
 use std::path::{ Path, PathBuf };
+use std::time::SystemTime;
 
 const DLL_PATH:     &[u8] = b"hammerplusplus/bin/hammerplusplus_dll.dll";
 const ADAPTER_PATH: &[u8] = b"hammerplusplus/bin/infra_hpp_adapter.dll";
@@ -27,7 +28,8 @@ const LEGACY_FILES: [&str; 4] =
 	"hammerplusplus_infra.cmd",
 ];
 
-pub const VERSION: &str = env!( "CARGO_PKG_VERSION" );
+// MAJOR.MINOR.BUILD.REVISION from build.rs, -git for GitHub Actions builds
+pub const VERSION: &str = env!( "INFRA_HPP_VERSION" );
 
 //-----------------------------------------------------------------------------
 // Folders
@@ -75,7 +77,7 @@ fn is_hpp_build( entry: &std::fs::DirEntry ) -> bool
 	name.starts_with( "hammerplusplus_portal2_build" ) && hpp_bin( &entry.path() ).is_some()
 }
 
-// The newest hammerplusplus_portal2_buildNNNN next to the installer or in the current folder
+// The newest hammerplusplus_portal2_buildXXXX next to the installer or in the current folder
 pub fn find_hpp_build() -> Option<PathBuf>
 {
 	let exe_dir = std::env::current_exe().ok().and_then( |exe| exe.parent().map( Path::to_path_buf ) );
@@ -122,14 +124,25 @@ pub fn installed_version( game: &Path ) -> Option<String>
 	Some( version )
 }
 
+// Numbers only: a -git suffix does not make a build newer
 fn parse_version( version: &str ) -> Vec<u32>
 {
-	version.split( '.' ).map( |part| part.parse().unwrap_or( 0 ) ).collect()
+	let numbers = version.split( '-' ).next().unwrap_or_default();
+
+	let parts = numbers.split( '.' ).map( |part| part.parse().unwrap_or( 0 ) ).collect();
+
+	parts
 }
 
 pub fn compare_versions( left: &str, right: &str ) -> Ordering
 {
 	parse_version( left ).cmp( &parse_version( right ) )
+}
+
+// An installation without a version file is older than any patcher that writes one
+pub fn is_older( version: Option<&str> ) -> bool
+{
+	version.is_none_or( |version| compare_versions( version, VERSION ).is_lt() )
 }
 
 //-----------------------------------------------------------------------------
@@ -158,9 +171,14 @@ fn validate_launcher( bin: &Path ) -> Result<(), String>
 	Ok( () )
 }
 
+fn hpp_dll( bin: &Path ) -> PathBuf
+{
+	bin.join( "hammerplusplus" ).join( "bin" ).join( "hammerplusplus_dll.dll" )
+}
+
 fn validate_dll( bin: &Path ) -> Result<(), String>
 {
-	let dll = read_file( &bin.join( "hammerplusplus" ).join( "bin" ).join( "hammerplusplus_dll.dll" ) )?;
+	let dll = read_file( &hpp_dll( bin ) )?;
 
 	if !pe::contains( &dll, b"Release_PORTAL2" ) || !pe::contains( &dll, b"Hammer002" )
 	{
@@ -174,6 +192,16 @@ pub fn validate_build( bin: &Path ) -> Result<(), String>
 {
 	validate_launcher( bin )?;
 	validate_dll( bin )
+}
+
+// Changes when either checked file is replaced
+pub fn build_stamp( bin: &Path ) -> Option<[SystemTime; 2]>
+{
+	let modified = |path: PathBuf| std::fs::metadata( path ).and_then( |meta| meta.modified() ).ok();
+
+	let stamp = [ modified( bin.join( "hammerplusplus.exe" ) )?, modified( hpp_dll( bin ) )? ];
+
+	Some( stamp )
 }
 
 fn validate_adapter() -> Result<(), String>
@@ -331,6 +359,32 @@ pub fn uninstall( game: &Path ) -> Result<String, String>
 	let message = format!( "Removed {removed} files. Hammer++ settings in bin\\hammerplusplus are kept" );
 
 	Ok( message )
+}
+
+fn with_removed_shortcuts( message: String, removed: usize ) -> String
+{
+	if removed == 0
+	{
+		return message;
+	}
+
+	let text = format!( "{message}. Desktop shortcuts removed: {removed}" );
+
+	text
+}
+
+// Shortcuts are found while the launcher they point to is still there
+pub fn uninstall_with_shortcuts( game: &Path ) -> Result<String, String>
+{
+	let shortcuts = shortcut::find_own( game );
+	let result    = uninstall( game ).map( |message| with_removed_shortcuts( message, shortcut::remove( game, &shortcuts ) ) );
+
+	result
+}
+
+pub fn running_hammer( game: &Path ) -> Vec<u32>
+{
+	process::running( &launcher_exe( game ) )
 }
 
 pub fn launcher_exe( game: &Path ) -> PathBuf

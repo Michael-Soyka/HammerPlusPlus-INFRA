@@ -12,7 +12,7 @@ use std::time::{ Duration, Instant };
 use windows_sys::Win32::Foundation::{ COLORREF, RECT };
 use windows_sys::Win32::Graphics::Gdi::{ BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateSolidBrush, DIB_RGB_COLORS, FillRect, HALFTONE, HDC, SRCCOPY, SetBrushOrgEx, SetStretchBltMode, StretchDIBits };
 
-const VIDEO: &[u8] = include_bytes!( "../assets/background.webp" );
+const VIDEO: &[u8] = include_bytes!( "../assets/main/background.webp" );
 
 // How often the window asks for a frame: finer than any frame duration
 pub const TICK_MS: u32 = 15;

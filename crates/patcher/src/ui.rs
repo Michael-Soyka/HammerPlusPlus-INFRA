@@ -7,31 +7,36 @@
 
 use crate::gdi::{ self, Canvas };
 use crate::palette::{ ACCENT, ACCENT_HOVER, ACCENT_PRESSED, BACKGROUND, BAD, BORDER, BUTTON, BUTTON_TEXT, DIM, FIELD, GOOD, HOVER, PRESSED, TEXT, WARNING };
-use crate::{ authors, avatar, background, gdiplus, install, steam };
+use crate::prompt::{ self, Choice, Prompt };
+use crate::icon::{ self, Icon };
+use crate::win10::Win10;
+use crate::{ authors, avatar, background, gdiplus, install, modal, picker, process, shortcut, steam };
 use std::cell::{ Cell, RefCell };
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{ Path, PathBuf };
 use std::ptr::{ null, null_mut };
+use std::time::{ Instant, SystemTime };
 use windows_sys::Win32::Foundation::{ COLORREF, HWND, LPARAM, LRESULT, MAX_PATH, POINT, RECT, WPARAM };
-use windows_sys::Win32::Graphics::Dwm::{ DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute };
-use windows_sys::Win32::Graphics::Gdi::{ BeginPaint, CreateSolidBrush, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_PATH_ELLIPSIS, DT_SINGLELINE, DT_TOP, DT_VCENTER, DT_WORDBREAK, EndPaint, FW_NORMAL, FW_SEMIBOLD, GetDC, GetStockObject, HBRUSH, HDC, HFONT, InflateRect, InvalidateRect, MapWindowPoints, NULL_BRUSH, PAINTSTRUCT, ReleaseDC, SetBkColor, SetTextColor };
-use windows_sys::Win32::System::Com::{ COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoTaskMemFree, CoUninitialize };
+use windows_sys::Win32::Graphics::Dwm::{ DWMWA_CAPTION_BUTTON_BOUNDS, DWMWA_USE_IMMERSIVE_DARK_MODE, DwmDefWindowProc, DwmExtendFrameIntoClientArea, DwmGetWindowAttribute, DwmSetWindowAttribute };
+use windows_sys::Win32::Graphics::Gdi::{ BeginPaint, CreateSolidBrush, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE, DT_TOP, DT_VCENTER, DT_WORDBREAK, ClientToScreen, EndPaint, FW_NORMAL, FW_SEMIBOLD, GetDC, GetStockObject, HBRUSH, HDC, HFONT, InflateRect, InvalidateRect, MapWindowPoints, NULL_BRUSH, PAINTSTRUCT, ReleaseDC, SetBkColor, SetTextColor };
+use windows_sys::Win32::System::Com::{ COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows_sys::Win32::UI::Controls::{ DRAWITEMSTRUCT, EM_SETCUEBANNER, ODS_DISABLED, ODS_FOCUS, ODS_SELECTED, WM_MOUSELEAVE };
-use windows_sys::Win32::UI::HiDpi::{ AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_SYSTEM_AWARE, GetDpiForSystem, GetSystemMetricsForDpi, SetProcessDpiAwarenessContext };
+use windows_sys::Win32::UI::Controls::{ BufferedPaintInit, BufferedPaintUnInit, DRAWITEMSTRUCT, EM_SETCUEBANNER, MARGINS, ODS_DISABLED, ODS_FOCUS, ODS_SELECTED, WM_MOUSELEAVE };
+use windows_sys::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT_SYSTEM_AWARE;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{ EnableWindow, SetFocus, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent };
-use windows_sys::Win32::UI::Shell::{ BFFM_INITIALIZED, BFFM_SETSELECTIONW, BIF_NEWDIALOGSTYLE, BIF_RETURNONLYFSDIRS, BROWSEINFOW, DefSubclassProc, DragAcceptFiles, DragFinish, DragQueryFileW, DragQueryPoint, HDROP, SHBrowseForFolderW, SHGetPathFromIDListW, SetWindowSubclass, ShellExecuteW };
-use windows_sys::Win32::UI::WindowsAndMessaging::{ BN_CLICKED, BS_OWNERDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DispatchMessageW, EN_CHANGE, ES_AUTOHSCROLL, GetClientRect, GetDlgCtrlID, GetDlgItem, GetMessageW, GetWindowTextLengthW, GetWindowTextW, HICON, IDC_ARROW, IDC_WAIT, IMAGE_ICON, IsDialogMessageW, LR_DEFAULTCOLOR, LoadCursorW, LoadImageW, MSG, PostQuitMessage, RegisterClassExW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_HIDE, SW_SHOW, SW_SHOWDEFAULT, SW_SHOWNORMAL, SendMessageW, SetCursor, SetTimer, SetWindowTextW, ShowWindow, TranslateMessage, WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_DESTROY, WM_DRAWITEM, WM_DROPFILES, WM_ERASEBKGND, WM_MOUSEMOVE, WM_PAINT, WM_SETFONT, WM_TIMER, WNDCLASSEXW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE };
+use windows_sys::Win32::UI::Shell::{ DefSubclassProc, DragAcceptFiles, DragFinish, DragQueryFileW, DragQueryPoint, HDROP, SetWindowSubclass, ShellExecuteW };
+use windows_sys::Win32::UI::WindowsAndMessaging::{ BN_CLICKED, BS_OWNERDRAW, CW_USEDEFAULT, CreateWindowExW, DI_NORMAL, DefWindowProcW, DispatchMessageW, DrawIconEx, EN_CHANGE, ES_AUTOHSCROLL, GetClientRect, GetDlgCtrlID, GetDlgItem, GetMessageW, GetWindowRect, GetWindowTextLengthW, HTCAPTION, HTCLIENT, GetWindowTextW, HICON, IDC_ARROW, IDC_WAIT, IMAGE_ICON, IsDialogMessageW, KillTimer, LR_DEFAULTCOLOR, LoadCursorW, LoadImageW, MB_ICONERROR, MB_OK, MSG, MessageBoxW, NCCALCSIZE_PARAMS, PostQuitMessage, RegisterClassExW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_HIDE, SW_SHOW, SW_SHOWDEFAULT, SW_SHOWNORMAL, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SendMessageW, SetCursor, SetTimer, SetWindowPos, SetWindowTextW, ShowWindow, TranslateMessage, WM_ACTIVATE, WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_DESTROY, WM_DRAWITEM, WM_DROPFILES, WM_ENTERSIZEMOVE, WM_ERASEBKGND, WM_EXITSIZEMOVE, WM_MOUSEMOVE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SETFONT, WM_TIMER, WNDCLASSEXW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE };
+
+const UNSUPPORTED: &str = "This system is not supported: the window needs Windows 10 or later.\n\nUse the command line instead:\ninfra-hpp-patcher.exe --help";
 
 const DOWNLOAD_URL: &str = "https://ficool2.github.io/HammerPlusPlus-Website/download.html";
 const CLASS:        &str = "InfraHppSetup";
 
 // Client area at 96 DPI
 const WIDTH:       i32 = 600;
-const HEIGHT:      i32 = 382;
+const HEIGHT:      i32 = 356;
 const DEFAULT_DPI: i32 = 96;
 
 // ShellExecute reports success with a value above 32
@@ -44,19 +49,16 @@ const ID_TITLE:        i32 = 100;
 const ID_GAME_LABEL:   i32 = 101;
 const ID_GAME:         i32 = 102;
 const ID_GAME_BROWSE:  i32 = 103;
-const ID_GAME_STATUS:  i32 = 104;
 const ID_HPP_LABEL:    i32 = 105;
 const ID_HPP:          i32 = 106;
 const ID_HPP_DOWNLOAD: i32 = 107;
 const ID_HPP_BROWSE:   i32 = 108;
-const ID_HPP_STATUS:   i32 = 109;
-const ID_VERSION:      i32 = 110;
 const ID_RESULT:       i32 = 111;
-const ID_INSTALL:      i32 = 112;
-const ID_REMOVE:       i32 = 113;
-const ID_REINSTALL:    i32 = 114;
-const ID_LAUNCH:       i32 = 115;
-const ID_INFO:         i32 = 116;
+const ID_INSTALL:       i32 = 112;
+const ID_REMOVE:        i32 = 113;
+const ID_LAUNCH:        i32 = 115;
+const ID_INFO:          i32 = 116;
+const ID_TITLE_VERSION: i32 = 117;
 
 // At 96 DPI
 #[ derive( Clone, Copy ) ]
@@ -69,21 +71,63 @@ struct Bounds
 }
 
 // Path edits sit inside drawn rounded frames with a padding
-const GAME_FRAME:    Bounds = Bounds { x: 16, y: 84, width: 470, height: 32 };
-const HPP_FRAME:     Bounds = Bounds { x: 16, y: 176, width: 372, height: 32 };
+const GAME_FRAME:    Bounds = Bounds { x: 16, y: 104, width: 470, height: 32 };
+const HPP_FRAME:     Bounds = Bounds { x: 16, y: 172, width: 430, height: 32 };
+
+// Without the Download button, as wide as the INFRA field
+const HPP_WIDE_FRAME: Bounds = Bounds { width: GAME_FRAME.width, ..HPP_FRAME };
 const FIELD_PADDING: i32 = 7;
 const FIELD_RADIUS:  i32 = 6;
 const FOCUS_RADIUS:  i32 = 5;
 const FOCUS_INSET:   i32 = 2;
-const INFO_RADIUS:   i32 = 9;
+
+// Icon buttons: no text drawn, the text stays for screen readers
+const ICON_BUTTONS: [(i32, Icon, i32); 2] = [ ( ID_HPP_DOWNLOAD, Icon::Download, 14 ), ( ID_INFO, Icon::Info, 16 ) ];
 
 // Files dropped below this line go to the Hammer++ field
-const HPP_SECTION_TOP: i32 = 150;
+const HPP_SECTION_TOP: i32 = 144;
+
+// The app icon left of the title, in place of the window title bar
+const TITLE_ICON: Bounds = Bounds { x: 16, y: 18, width: 28, height: 28 };
 
 const BACKGROUND_TIMER: usize = 1;
 
+// Polls for Hammer++ to exit before Remove and Update
+const CLOSE_TIMER: usize = 2;
+
+const SHORTCUT_PROMPT: Prompt = Prompt
+{
+	title:   "Create a desktop shortcut?",
+	text:    "There is no Hammer++ for INFRA shortcut on the desktop. It starts Hammer++ with INFRA without the patcher.",
+	choices: &[ Choice { text: "Create", accent: true }, Choice { text: "Not now", accent: false } ],
+	default: Some( CREATE_SHORTCUT ),
+};
+
+const CREATE_SHORTCUT: usize = 0;
+
+// No default: Enter must not close Hammer++
+const RUNNING_PROMPT: Prompt = Prompt
+{
+	title:   "Hammer++ is running",
+	text:    "Save your maps in Hammer++ first. It will be closed, then removed from INFRA.",
+	choices: &[ Choice { text: "Close and remove", accent: true }, Choice { text: "Cancel", accent: false } ],
+	default: None,
+};
+
+const CLOSE_AND_REMOVE: usize = 0;
+
+// No default: Enter must not close Hammer++
+const UPDATE_PROMPT: Prompt = Prompt
+{
+	title:   "Hammer++ is running",
+	text:    "Save your maps in Hammer++ first. It will be closed, then updated.",
+	choices: &[ Choice { text: "Close and update", accent: true }, Choice { text: "Cancel", accent: false } ],
+	default: None,
+};
+
+const CLOSE_AND_UPDATE: usize = 0;
+
 const LINE:      u32 = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS;
-const PATH_LINE: u32 = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX | DT_PATH_ELLIPSIS;
 const PARAGRAPH: u32 = DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX;
 
 // Text drawn over the video: no controls, which would cover it with their background
@@ -95,15 +139,13 @@ struct Label
 	format: u32,
 }
 
-const LABELS: [Label; 7] =
+const LABELS: [Label; 5] =
 [
-	Label { id: ID_TITLE, bounds: Bounds { x: 16, y: 14, width: 568, height: 36 }, title: true, format: LINE },
-	Label { id: ID_GAME_LABEL, bounds: Bounds { x: 16, y: 62, width: 568, height: 20 }, title: false, format: LINE },
-	Label { id: ID_GAME_STATUS, bounds: Bounds { x: 16, y: 122, width: 568, height: 20 }, title: false, format: PATH_LINE },
-	Label { id: ID_HPP_LABEL, bounds: Bounds { x: 16, y: 154, width: 568, height: 20 }, title: false, format: LINE },
-	Label { id: ID_HPP_STATUS, bounds: Bounds { x: 16, y: 214, width: 568, height: 20 }, title: false, format: PATH_LINE },
-	Label { id: ID_VERSION, bounds: Bounds { x: 16, y: 246, width: 568, height: 20 }, title: false, format: LINE },
-	Label { id: ID_RESULT, bounds: Bounds { x: 16, y: 274, width: 568, height: 48 }, title: false, format: PARAGRAPH },
+	Label { id: ID_TITLE, bounds: Bounds { x: 54, y: 14, width: 530, height: 32 }, title: true, format: LINE },
+	Label { id: ID_TITLE_VERSION, bounds: Bounds { x: 54, y: 46, width: 530, height: 20 }, title: false, format: LINE },
+	Label { id: ID_GAME_LABEL, bounds: Bounds { x: 16, y: 82, width: 568, height: 20 }, title: false, format: LINE },
+	Label { id: ID_HPP_LABEL, bounds: Bounds { x: 16, y: 150, width: 568, height: 20 }, title: false, format: LINE },
+	Label { id: ID_RESULT, bounds: Bounds { x: 16, y: 220, width: 568, height: 48 }, title: false, format: PARAGRAPH },
 ];
 
 const STATIC_LABELS: [(i32, &str, COLORREF); 3] =
@@ -140,30 +182,29 @@ const fn edit( id: i32, frame: Bounds ) -> Control
 	Control { class: "EDIT", text: "", style: EDIT_STYLE, id, bounds: field_edit( frame ) }
 }
 
-const CONTROLS: [Control; 10] =
+const CONTROLS: [Control; 9] =
 [
 	edit( ID_GAME, GAME_FRAME ),
-	button( "Browse\u{2026}", ID_GAME_BROWSE, 494, 84, 90, 32 ),
+	button( "Browse\u{2026}", ID_GAME_BROWSE, 494, 104, 90, 32 ),
 	edit( ID_HPP, HPP_FRAME ),
-	button( "Download", ID_HPP_DOWNLOAD, 396, 176, 90, 32 ),
-	button( "Browse\u{2026}", ID_HPP_BROWSE, 494, 176, 90, 32 ),
-	button( "Install", ID_INSTALL, 444, 334, 140, 34 ),
-	button( "Remove", ID_REMOVE, 232, 334, 112, 34 ),
-	button( "Reinstall", ID_REINSTALL, 352, 334, 112, 34 ),
-	button( "Launch", ID_LAUNCH, 472, 334, 112, 34 ),
-	button( "i", ID_INFO, 16, 334, 34, 34 ),
+	button( "Download", ID_HPP_DOWNLOAD, 454, 172, 32, 32 ),
+	button( "Browse\u{2026}", ID_HPP_BROWSE, 494, 172, 90, 32 ),
+	button( "Install", ID_INSTALL, 444, 308, 140, 34 ),
+	button( "Remove", ID_REMOVE, 352, 308, 112, 34 ),
+	button( "Launch", ID_LAUNCH, 472, 308, 112, 34 ),
+	button( "Info", ID_INFO, 16, 308, 34, 34 ),
 ];
 
 // Repainted on every frame: their rounded corners show the video
-const BUTTONS: [i32; 8] = [ ID_GAME_BROWSE, ID_HPP_DOWNLOAD, ID_HPP_BROWSE, ID_INSTALL, ID_REMOVE, ID_REINSTALL, ID_LAUNCH, ID_INFO ];
+const BUTTONS: [i32; 7] = [ ID_GAME_BROWSE, ID_HPP_DOWNLOAD, ID_HPP_BROWSE, ID_INSTALL, ID_REMOVE, ID_LAUNCH, ID_INFO ];
 
-// Install and Launch share a place with this row
-const INSTALLED_ROW: [i32; 3] = [ ID_REMOVE, ID_REINSTALL, ID_LAUNCH ];
+// Install shares a place with this row
+const INSTALLED_ROW: [i32; 2] = [ ID_REMOVE, ID_LAUNCH ];
 
 const CUE_BANNERS: [(i32, &str); 2] =
 [
 	( ID_GAME, "C:\\Program Files (x86)\\Steam\\steamapps\\common\\infra" ),
-	( ID_HPP, "hammerplusplus_portal2_buildNNNN" ),
+	( ID_HPP, "hammerplusplus_portal2_buildXXXX" ),
 ];
 
 struct ButtonColors
@@ -176,12 +217,6 @@ struct ButtonColors
 const PLAIN_COLORS:  ButtonColors = ButtonColors { normal: BUTTON, hover: HOVER, pressed: PRESSED };
 const ACCENT_COLORS: ButtonColors = ButtonColors { normal: ACCENT, hover: ACCENT_HOVER, pressed: ACCENT_PRESSED };
 
-struct StatusLine
-{
-	text:  String,
-	color: COLORREF,
-}
-
 #[ derive( Clone, Default ) ]
 struct State
 {
@@ -191,6 +226,30 @@ struct State
 
 	// The bin of a checked Portal 2 build
 	hpp: Option<PathBuf>,
+}
+
+// The last checked build: typing over the same folder does not read it again
+struct Checked
+{
+	bin:   PathBuf,
+	stamp: [SystemTime; 2],
+	valid: bool,
+}
+
+#[ derive( Clone, Copy ) ]
+enum AfterClose
+{
+	Remove,
+	Update,
+}
+
+// Remove and Update wait for Hammer++ of this INFRA to exit
+#[ derive( Clone ) ]
+struct Closing
+{
+	game:  PathBuf,
+	start: Instant,
+	then:  AfterClose,
 }
 
 struct App
@@ -204,11 +263,24 @@ struct App
 	// Id of the button under the cursor, 0 for none
 	hovered: Cell<i32>,
 
+	// Widens when the Download button hides
+	hpp_frame: Cell<Bounds>,
+
+	// Height of the removed title bar: the DWM frame extends this far into the client area
+	caption: Cell<i32>,
+
+	title_icon: Cell<HICON>,
+
+	// The window is being dragged
+	moving: Cell<bool>,
+
 	// The dimmed video frame under everything
 	scene: RefCell<Option<Canvas>>,
 
-	labels: RefCell<HashMap<i32, (String, COLORREF)>>,
-	state:  RefCell<State>,
+	labels:  RefCell<HashMap<i32, (String, COLORREF)>>,
+	state:   RefCell<State>,
+	checked: RefCell<Option<Checked>>,
+	closing: RefCell<Option<Closing>>,
 }
 
 thread_local!
@@ -221,9 +293,15 @@ thread_local!
 		field:      Cell::new( null_mut() ),
 		dpi:        Cell::new( DEFAULT_DPI ),
 		hovered:    Cell::new( 0 ),
+		hpp_frame:  Cell::new( HPP_FRAME ),
+		caption:    Cell::new( 0 ),
+		title_icon: Cell::new( null_mut() ),
+		moving:     Cell::new( false ),
 		scene:      RefCell::new( None ),
 		labels:     RefCell::new( HashMap::new() ),
 		state:      RefCell::new( State::default() ),
+		checked:    RefCell::new( None ),
+		closing:    RefCell::new( None ),
 	};
 }
 
@@ -357,70 +435,7 @@ pub fn shell_open( file: impl AsRef<OsStr>, args: Option<&str>, dir: Option<&Pat
 
 fn is_outdated( state: &State ) -> bool
 {
-	state.installed && state.version.as_deref().is_none_or( |version| install::compare_versions( version, install::VERSION ).is_lt() )
-}
-
-fn describe_version( state: &State ) -> String
-{
-	let installer = install::VERSION;
-
-	if !state.installed
-	{
-		return format!( "Installer version {installer}" );
-	}
-
-	let Some( version ) = &state.version else
-	{
-		return format!( "Installed: unknown, older than versioning  \u{b7}  Installer: {installer}  \u{2014}  outdated" );
-	};
-
-	let verdict = match install::compare_versions( version, installer )
-	{
-		Ordering::Less => "outdated",
-		Ordering::Equal => "up to date",
-		Ordering::Greater => "newer than this installer",
-	};
-
-	let text = format!( "Installed: {version}  \u{b7}  Installer: {installer}  \u{2014}  {verdict}" );
-
-	text
-}
-
-fn describe_game( input: &str, game: Option<&Path>, installed: bool ) -> StatusLine
-{
-	if input.is_empty()
-	{
-		return StatusLine { text: "Enter, browse or drop the INFRA folder".to_string(), color: DIM };
-	}
-
-	let Some( dir ) = game else
-	{
-		return StatusLine { text: "No bin\\hammer.exe here: not an INFRA folder".to_string(), color: BAD };
-	};
-
-	if installed
-	{
-		return StatusLine { text: format!( "Installed: {}", dir.display() ), color: WARNING };
-	}
-
-	StatusLine { text: format!( "INFRA found: {}", dir.display() ), color: GOOD }
-}
-
-fn describe_hpp( input: &str, check: Option<&Result<(), String>> ) -> StatusLine
-{
-	if input.is_empty()
-	{
-		return StatusLine { text: "Download the Portal 2 build, unpack it and pick its folder".to_string(), color: DIM };
-	}
-
-	let status = match check
-	{
-		None => StatusLine { text: "hammerplusplus.exe is not found here or in its bin".to_string(), color: BAD },
-		Some( Err( error ) ) => StatusLine { text: error.clone(), color: BAD },
-		Some( Ok( () ) ) => StatusLine { text: format!( "Hammer++ build: {input}" ), color: GOOD },
-	};
-
-	status
+	state.installed && install::is_older( state.version.as_deref() )
 }
 
 fn show_buttons( ids: &[i32], show: i32 )
@@ -431,22 +446,26 @@ fn show_buttons( ids: &[i32], show: i32 )
 	}
 }
 
-// Not installed: Install alone. Installed: Remove, Reinstall (Update when outdated) and Launch
+// Not installed: Install alone. Installed: Remove and Launch, which turns into Update when outdated
 fn update_buttons( state: &State )
 {
-	let mut reinstall = "Reinstall";
+	let outdated = is_outdated( state );
 
-	if is_outdated( state )
+	let mut launch = "Launch";
+
+	if outdated
 	{
-		reinstall = "Update";
+		launch = "Update";
 	}
 
-	set_text( item( ID_REINSTALL ), reinstall );
+	set_text( item( ID_LAUNCH ), launch );
 
 	unsafe
 	{
 		EnableWindow( item( ID_INSTALL ), ( state.game.is_some() && state.hpp.is_some() ).into() );
-		EnableWindow( item( ID_REINSTALL ), state.hpp.is_some().into() );
+
+		// Update installs: it needs the build
+		EnableWindow( item( ID_LAUNCH ), ( !outdated || state.hpp.is_some() ).into() );
 	}
 
 	// Install and Launch share a place: hide first, then show
@@ -462,7 +481,7 @@ fn update_buttons( state: &State )
 	}
 
 	invalidate( item( ID_INSTALL ) );
-	invalidate( item( ID_REINSTALL ) );
+	invalidate( item( ID_LAUNCH ) );
 }
 
 fn set_label( id: i32, text: &str, color: COLORREF )
@@ -477,19 +496,12 @@ fn set_label( id: i32, text: &str, color: COLORREF )
 	unsafe { InvalidateRect( window(), &scale_bounds( label.bounds ), 0 ) };
 }
 
-fn set_status( id: i32, status: &StatusLine )
-{
-	set_label( id, &status.text, status.color );
-}
-
 fn refresh_game()
 {
 	let input     = field_text( ID_GAME );
 	let game      = install::game_dir( Path::new( &input ) );
 	let installed = game.as_deref().is_some_and( install::is_installed );
 	let version   = game.as_deref().filter( |_| installed ).and_then( install::installed_version );
-
-	set_status( ID_GAME_STATUS, &describe_game( &input, game.as_deref(), installed ) );
 
 	update_state(
 		|state|
@@ -500,28 +512,56 @@ fn refresh_game()
 		}
 	);
 
-	let state = state();
+	update_buttons( &state() );
+	invalidate_frame( GAME_FRAME );
+}
 
-	set_label( ID_VERSION, &describe_version( &state ), DIM );
-	update_buttons( &state );
+fn is_valid_build( bin: &Path ) -> bool
+{
+	let Some( stamp ) = install::build_stamp( bin ) else
+	{
+		return false;
+	};
+
+	let cached = app( |app| app.checked.borrow().as_ref().filter( |checked| checked.bin == bin && checked.stamp == stamp ).map( |checked| checked.valid ) );
+
+	if let Some( valid ) = cached
+	{
+		return valid;
+	}
+
+	let valid = install::validate_build( bin ).is_ok();
+
+	app( |app| app.checked.replace( Some( Checked { bin: bin.to_path_buf(), stamp, valid } ) ) );
+
+	valid
 }
 
 fn refresh_hpp()
 {
 	let input = field_text( ID_HPP );
 	let bin   = install::hpp_bin( Path::new( &input ) );
-	let check = bin.as_deref().map( install::validate_build );
-
-	set_status( ID_HPP_STATUS, &describe_hpp( &input, check.as_ref() ) );
-
-	let valid = check.is_some_and( |check| check.is_ok() );
+	let valid = bin.as_deref().is_some_and( is_valid_build );
 	let hpp   = bin.filter( |_| valid );
+
+	// A valid build in the field takes the place of the button
+	if hpp.is_some() != is_download_hidden()
+	{
+		show_download( hpp.is_none() );
+	}
 
 	update_state( |state| state.hpp = hpp );
 	update_buttons( &state() );
+	invalidate_frame( app( |app| app.hpp_frame.get() ) );
 }
 
-fn set_result( text: &str, color: COLORREF )
+// The frame edge shows the check of its field
+fn invalidate_frame( frame: Bounds )
+{
+	unsafe { InvalidateRect( window(), &scale_bounds( frame ), 0 ) };
+}
+
+pub fn set_result( text: &str, color: COLORREF )
 {
 	set_label( ID_RESULT, text, color );
 }
@@ -553,7 +593,41 @@ fn on_hpp_change()
 	refresh_hpp();
 }
 
-// Install and Reinstall: install() writes over a previous installation
+fn is_closing() -> bool
+{
+	app( |app| app.closing.borrow().is_some() )
+}
+
+fn create_shortcut( game: &Path )
+{
+	match shortcut::create( game )
+	{
+		Ok( file ) => set_result( &format!( "Shortcut created: {}", file.display() ), GOOD ),
+		Err( error ) => set_result( &error, BAD ),
+	}
+}
+
+// Only when this INFRA has no shortcut yet
+fn offer_shortcut( game: PathBuf )
+{
+	if shortcut::exists( &game )
+	{
+		return;
+	}
+
+	prompt::open(
+		SHORTCUT_PROMPT,
+		move |choice|
+		{
+			if choice == CREATE_SHORTCUT
+			{
+				create_shortcut( &game );
+			}
+		}
+	);
+}
+
+// Install and Reinstall: install() writes over a previous installation. Offers a shortcut after success
 fn on_install()
 {
 	let state = state();
@@ -563,9 +637,22 @@ fn on_install()
 		return;
 	};
 
+	if is_closing()
+	{
+		return;
+	}
+
 	unsafe { SetCursor( LoadCursorW( null_mut(), IDC_WAIT ) ) };
 
-	show_result( install::install( &game, &hpp ) );
+	let result    = install::install( &game, &hpp );
+	let installed = result.is_ok();
+
+	show_result( result );
+
+	if installed
+	{
+		offer_shortcut( game );
+	}
 }
 
 fn installed_game() -> Option<PathBuf>
@@ -575,6 +662,70 @@ fn installed_game() -> Option<PathBuf>
 	state.game.filter( |_| state.installed )
 }
 
+fn remove( game: &Path )
+{
+	show_result( install::uninstall_with_shortcuts( game ) );
+}
+
+// Asks Hammer++ to close and waits for it on a timer: it may ask to save first
+fn close_hammer( game: &Path, then: AfterClose )
+{
+	process::close( &install::running_hammer( game ) );
+
+	let closing = Closing { game: game.to_path_buf(), start: Instant::now(), then };
+
+	app( |app| app.closing.replace( Some( closing ) ) );
+
+	set_result( "Waiting for Hammer++ to close. If it asks to save, answer it there", WARNING );
+
+	unsafe { SetTimer( window(), CLOSE_TIMER, process::CLOSE_POLL_MS, None ) };
+}
+
+fn stop_closing()
+{
+	app( |app| app.closing.replace( None ) );
+
+	unsafe { KillTimer( window(), CLOSE_TIMER ) };
+}
+
+// Removes or updates once Hammer++ exits; never kills it, so unsaved maps are not lost
+fn on_close_tick()
+{
+	let Some( closing ) = app( |app| app.closing.borrow().clone() ) else
+	{
+		stop_closing();
+
+		return;
+	};
+
+	if install::running_hammer( &closing.game ).is_empty()
+	{
+		stop_closing();
+
+		match closing.then
+		{
+			AfterClose::Remove => remove( &closing.game ),
+			AfterClose::Update => on_install(),
+		}
+
+		return;
+	}
+
+	if closing.start.elapsed() >= process::CLOSE_TIMEOUT
+	{
+		stop_closing();
+
+		let message = match closing.then
+		{
+			AfterClose::Remove => "Hammer++ did not close, nothing was removed. Close it and press Remove again",
+			AfterClose::Update => "Hammer++ did not close, nothing was updated. Close it and press Update again",
+		};
+
+		set_result( message, BAD );
+	}
+}
+
+// A running Hammer++ of this INFRA is closed first, after the user saves their work
 fn on_remove()
 {
 	let Some( game ) = installed_game() else
@@ -582,15 +733,73 @@ fn on_remove()
 		return;
 	};
 
-	show_result( install::uninstall( &game ) );
+	if is_closing()
+	{
+		return;
+	}
+
+	if install::running_hammer( &game ).is_empty()
+	{
+		remove( &game );
+
+		return;
+	}
+
+	prompt::open(
+		RUNNING_PROMPT,
+		move |choice|
+		{
+			if choice == CLOSE_AND_REMOVE
+			{
+				close_hammer( &game, AfterClose::Remove );
+			}
+		}
+	);
 }
 
+// A running Hammer++ holds its files: it is closed first, after the user saves their work
+fn on_update( game: &Path )
+{
+	if is_closing()
+	{
+		return;
+	}
+
+	if install::running_hammer( game ).is_empty()
+	{
+		on_install();
+
+		return;
+	}
+
+	let game = game.to_path_buf();
+
+	prompt::open(
+		UPDATE_PROMPT,
+		move |choice|
+		{
+			if choice == CLOSE_AND_UPDATE
+			{
+				close_hammer( &game, AfterClose::Update );
+			}
+		}
+	);
+}
+
+// Launch, or Update for an installation older than this patcher
 fn on_launch()
 {
 	let Some( game ) = installed_game() else
 	{
 		return;
 	};
+
+	if is_outdated( &state() )
+	{
+		on_update( &game );
+
+		return;
+	}
 
 	let started = shell_open( install::launcher_exe( &game ), Some( &install::launch_args( &game ) ), Some( &game.join( "bin" ) ) );
 
@@ -617,52 +826,13 @@ fn on_download()
 	}
 }
 
-// Selects the current field path once the dialog opens
-unsafe extern "system" fn browse_callback( window: HWND, message: u32, _: LPARAM, data: LPARAM ) -> i32
-{
-	if message == BFFM_INITIALIZED
-	{
-		unsafe { SendMessageW( window, BFFM_SETSELECTIONW, 1, data ) };
-	}
-
-	0
-}
-
 fn on_browse( field: i32, title: &str )
 {
-	let current = wide( field_text( field ) );
-	let title   = wide( title );
+	let current = field_text( field );
 
-	let mut display = [ 0u16; MAX_PATH as usize ];
-
-	let info = BROWSEINFOW
+	if let Some( path ) = picker::pick( window(), title, Path::new( &current ) )
 	{
-		hwndOwner:      window(),
-		pidlRoot:       null_mut(),
-		pszDisplayName: display.as_mut_ptr(),
-		lpszTitle:      title.as_ptr(),
-		ulFlags:        BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE,
-		lpfn:           Some( browse_callback ),
-		lParam:         current.as_ptr() as LPARAM,
-		iImage:         0,
-	};
-
-	let list = unsafe { SHBrowseForFolderW( &info ) };
-
-	if list.is_null()
-	{
-		return;
-	}
-
-	let mut path = [ 0u16; MAX_PATH as usize ];
-
-	let found = unsafe { SHGetPathFromIDListW( list, path.as_mut_ptr() ) } != 0;
-
-	unsafe { CoTaskMemFree( list.cast() ) };
-
-	if found
-	{
-		set_text( item( field ), &from_wide( &path ) );
+		set_text( item( field ), &path.display().to_string() );
 	}
 }
 
@@ -711,7 +881,7 @@ fn on_command( id: i32, code: u32 )
 		( ID_GAME_BROWSE, BN_CLICKED ) => on_browse( ID_GAME, "INFRA folder" ),
 		( ID_HPP_BROWSE, BN_CLICKED ) => on_browse( ID_HPP, "Hammer++ build for Portal 2" ),
 		( ID_HPP_DOWNLOAD, BN_CLICKED ) => on_download(),
-		( ID_INSTALL | ID_REINSTALL, BN_CLICKED ) => on_install(),
+		( ID_INSTALL, BN_CLICKED ) => on_install(),
 		( ID_REMOVE, BN_CLICKED ) => on_remove(),
 		( ID_LAUNCH, BN_CLICKED ) => on_launch(),
 		( ID_INFO, BN_CLICKED ) => on_info(),
@@ -807,16 +977,18 @@ fn draw_button_focus( item: &DRAWITEMSTRUCT )
 	gdi::outline_round_rect( item.hDC, &focus, TEXT, FOCUS_RADIUS );
 }
 
-// The circle around the "i" of the info button
-fn draw_info_circle( item: &DRAWITEMSTRUCT )
+fn draw_button_content( item: &DRAWITEMSTRUCT )
 {
-	let rect     = item.rcItem;
-	let center_x = ( rect.left + rect.right ) / 2;
-	let center_y = ( rect.top + rect.bottom ) / 2;
-	let radius   = scale( INFO_RADIUS );
-	let circle   = RECT { left: center_x - radius, top: center_y - radius, right: center_x + radius, bottom: center_y + radius };
+	let icon = ICON_BUTTONS.iter().find( |( id, _, _ )| *id == item.CtlID as i32 );
 
-	gdi::outline_round_rect( item.hDC, &circle, BUTTON_TEXT, 2 * INFO_RADIUS );
+	if let Some( &( _, icon, size ) ) = icon
+	{
+		icon::draw( item.hDC, &item.rcItem, icon, scale( size ) );
+
+		return;
+	}
+
+	draw_button_text( item );
 }
 
 fn draw_button( item: &DRAWITEMSTRUCT, window_x: i32, window_y: i32 )
@@ -833,12 +1005,7 @@ fn draw_button( item: &DRAWITEMSTRUCT, window_x: i32, window_y: i32 )
 	copy_scene( item.hDC, &item.rcItem, window_x, window_y );
 
 	gdi::fill_round_rect( item.hDC, &item.rcItem, fill, edge, FIELD_RADIUS );
-	draw_button_text( item );
-
-	if item.CtlID as i32 == ID_INFO
-	{
-		draw_info_circle( item );
-	}
+	draw_button_content( item );
 
 	if ( item.itemState & ODS_FOCUS ) != 0
 	{
@@ -888,6 +1055,22 @@ fn draw_labels( dc: HDC )
 	}
 }
 
+// Grey while empty, green for a checked path, red for a wrong one
+fn field_edge( id: i32, valid: bool ) -> COLORREF
+{
+	if valid
+	{
+		return GOOD;
+	}
+
+	if field_text( id ).is_empty()
+	{
+		return BORDER;
+	}
+
+	BAD
+}
+
 fn on_paint()
 {
 	let window = window();
@@ -902,13 +1085,24 @@ fn on_paint()
 
 	copy_scene( frame.dc, &whole, 0, 0 );
 
-	gdi::fill_round_rect( frame.dc, &scale_bounds( GAME_FRAME ), FIELD, BORDER, FIELD_RADIUS );
-	gdi::fill_round_rect( frame.dc, &scale_bounds( HPP_FRAME ), FIELD, BORDER, FIELD_RADIUS );
-	draw_labels( frame.dc );
+	let state = state();
 
-	frame.copy_to( dc, &whole, 0, 0 );
+	gdi::fill_round_rect( frame.dc, &scale_bounds( GAME_FRAME ), FIELD, field_edge( ID_GAME, state.game.is_some() ), FIELD_RADIUS );
+	gdi::fill_round_rect( frame.dc, &scale_bounds( app( |app| app.hpp_frame.get() ) ), FIELD, field_edge( ID_HPP, state.hpp.is_some() ), FIELD_RADIUS );
+	draw_labels( frame.dc );
+	draw_title_icon( frame.dc );
+
+	gdi::present( dc, &frame, &whole, caption_buttons() );
 
 	unsafe { EndPaint( window, &paint ) };
+}
+
+fn draw_title_icon( dc: HDC )
+{
+	let rect = scale_bounds( TITLE_ICON );
+	let icon = app( |app| app.title_icon.get() );
+
+	unsafe { DrawIconEx( dc, rect.left, rect.top, icon, rect.right - rect.left, rect.bottom - rect.top, 0, null_mut(), DI_NORMAL ) };
 }
 
 fn create_scene( window: HWND, width: i32, height: i32 ) -> Canvas
@@ -937,10 +1131,10 @@ fn render_scene()
 	);
 }
 
-// Paused under the authors card: it shows a snapshot of the window anyway
+// Paused under a card: it shows a snapshot of the window anyway
 fn on_background_tick()
 {
-	if authors::is_open() || !background::advance()
+	if modal::is_open() || app( |app| app.moving.get() ) || !background::advance()
 	{
 		return;
 	}
@@ -951,6 +1145,16 @@ fn on_background_tick()
 	for id in BUTTONS
 	{
 		invalidate( item( id ) );
+	}
+}
+
+fn on_timer( timer: usize )
+{
+	match timer
+	{
+		BACKGROUND_TIMER => on_background_tick(),
+		CLOSE_TIMER => on_close_tick(),
+		_ => {}
 	}
 }
 
@@ -1036,6 +1240,8 @@ fn add_controls()
 		set_label( id, text, color );
 	}
 
+	set_label( ID_TITLE_VERSION, &format!( "Version {}", install::VERSION ), DIM );
+
 	for control in &CONTROLS
 	{
 		add_control( control );
@@ -1052,6 +1258,36 @@ fn add_controls()
 
 		unsafe { SendMessageW( item( id ), EM_SETCUEBANNER, 1, cue.as_ptr() as LPARAM ) };
 	}
+}
+
+// A found build needs no download: its field takes the place of the button
+fn show_download( shown: bool )
+{
+	let mut frame = HPP_WIDE_FRAME;
+	let mut show  = SW_HIDE;
+
+	if shown
+	{
+		frame = HPP_FRAME;
+		show  = SW_SHOW;
+	}
+
+	let edit = scale_bounds( field_edit( frame ) );
+
+	app( |app| app.hpp_frame.set( frame ) );
+
+	unsafe
+	{
+		ShowWindow( item( ID_HPP_DOWNLOAD ), show );
+		SetWindowPos( item( ID_HPP ), null_mut(), edit.left, edit.top, edit.right - edit.left, edit.bottom - edit.top, SWP_NOZORDER );
+	}
+
+	invalidate( window() );
+}
+
+fn is_download_hidden() -> bool
+{
+	app( |app| app.hpp_frame.get().width ) == HPP_WIDE_FRAME.width
 }
 
 // Found folders fill the fields, which refreshes them through EN_CHANGE
@@ -1083,11 +1319,96 @@ fn set_dark_title_bar( window: HWND )
 	unsafe { DwmSetWindowAttribute( window, DWMWA_USE_IMMERSIVE_DARK_MODE as u32, ( &raw const dark ).cast(), size_of::<i32>() as u32 ) };
 }
 
+//-----------------------------------------------------------------------------
+// Frame: the title bar is removed, DWM draws its buttons over the client area
+//-----------------------------------------------------------------------------
+
+fn extend_frame( window: HWND )
+{
+	let margins = MARGINS { cxLeftWidth: 0, cxRightWidth: 0, cyTopHeight: app( |app| app.caption.get() ), cyBottomHeight: 0 };
+
+	unsafe { DwmExtendFrameIntoClientArea( window, &margins ) };
+}
+
+// Client coordinates of the minimize, maximize and close buttons
+pub fn caption_buttons() -> Option<RECT>
+{
+	let window = window();
+
+	let mut bounds = RECT::default();
+	let mut frame  = RECT::default();
+	let mut origin = POINT { x: 0, y: 0 };
+
+	let read = unsafe { DwmGetWindowAttribute( window, DWMWA_CAPTION_BUTTON_BOUNDS as u32, ( &raw mut bounds ).cast(), size_of::<RECT>() as u32 ) } == 0;
+
+	if !read
+	{
+		return None;
+	}
+
+	// The bounds are relative to the window, not to its client area
+	unsafe
+	{
+		GetWindowRect( window, &mut frame );
+		ClientToScreen( window, &mut origin );
+	}
+
+	let x = origin.x - frame.left;
+	let y = origin.y - frame.top;
+
+	let buttons = RECT { left: bounds.left - x, top: bounds.top - y, right: bounds.right - x, bottom: bounds.bottom - y };
+
+	Some( buttons )
+}
+
+// The default borders without the title bar and the top border
+fn on_nc_calc_size( window: HWND, wparam: WPARAM, lparam: LPARAM ) -> LRESULT
+{
+	if wparam == 0
+	{
+		return unsafe { DefWindowProcW( window, WM_NCCALCSIZE, wparam, lparam ) };
+	}
+
+	let client = unsafe { &raw mut ( *( lparam as *mut NCCALCSIZE_PARAMS ) ).rgrc[ 0 ] };
+	let top    = unsafe { ( *client ).top };
+
+	unsafe
+	{
+		DefWindowProcW( window, WM_NCCALCSIZE, wparam, lparam );
+
+		( *client ).top = top;
+	}
+
+	0
+}
+
+// Any free place moves the window: fields and buttons are child windows and answer for themselves.
+// The caption buttons are already answered by DwmDefWindowProc
+fn on_hit_test( window: HWND, lparam: LPARAM ) -> LRESULT
+{
+	let hit = unsafe { DefWindowProcW( window, WM_NCHITTEST, 0, lparam ) };
+
+	if hit != HTCLIENT as LRESULT
+	{
+		return hit;
+	}
+
+	HTCAPTION as LRESULT
+}
+
 fn on_create( window: HWND )
 {
 	app( |app| app.window.set( window ) );
 
 	set_dark_title_bar( window );
+	extend_frame( window );
+
+	// Applies WM_NCCALCSIZE to the window just created
+	unsafe { SetWindowPos( window, null_mut(), 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER ) };
+
+	let icon = load_icon( scale( TITLE_ICON.width ), scale( TITLE_ICON.height ) );
+
+	app( |app| app.title_icon.set( icon ) );
 
 	let font       = gdi::create_font( 15, FW_NORMAL as i32 );
 	let title_font = gdi::create_font( 26, FW_SEMIBOLD as i32 );
@@ -1122,8 +1443,41 @@ fn hiword( wparam: WPARAM ) -> u32
 
 unsafe extern "system" fn window_proc( window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM ) -> LRESULT
 {
+	// Hover, press and hit testing of the caption buttons
+	let mut handled = 0;
+
+	if unsafe { DwmDefWindowProc( window, message, wparam, lparam, &mut handled ) } != 0
+	{
+		return handled;
+	}
+
 	match message
 	{
+		WM_NCCALCSIZE => on_nc_calc_size( window, wparam, lparam ),
+
+		WM_NCHITTEST => on_hit_test( window, lparam ),
+
+		WM_ACTIVATE =>
+		{
+			extend_frame( window );
+
+			unsafe { DefWindowProcW( window, message, wparam, lparam ) }
+		}
+
+		WM_ENTERSIZEMOVE =>
+		{
+			app( |app| app.moving.set( true ) );
+
+			0
+		}
+
+		WM_EXITSIZEMOVE =>
+		{
+			app( |app| app.moving.set( false ) );
+
+			0
+		}
+
 		WM_CREATE =>
 		{
 			on_create( window );
@@ -1163,7 +1517,7 @@ unsafe extern "system" fn window_proc( window: HWND, message: u32, wparam: WPARA
 
 		WM_TIMER =>
 		{
-			on_background_tick();
+			on_timer( wparam );
 
 			0
 		}
@@ -1191,18 +1545,20 @@ unsafe extern "system" fn window_proc( window: HWND, message: u32, wparam: WPARA
 	}
 }
 
-// Fixed size: no resizing, no maximize
-fn create_window( class: &[u16] ) -> HWND
+// Fixed size: no resizing, no maximize. The title bar is part of the client area, the title stays for the taskbar
+fn create_window( class: &[u16], win10: &Win10 ) -> HWND
 {
 	let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN;
 
 	let mut rect = RECT { left: 0, top: 0, right: scale( WIDTH ), bottom: scale( HEIGHT ) };
 
-	unsafe { AdjustWindowRectExForDpi( &mut rect, style, 0, 0, app( |app| app.dpi.get() ) as u32 ) };
+	win10.adjust_window_rect_ex_for_dpi( &mut rect, style, 0, app( |app| app.dpi.get() ) as u32 );
+
+	app( |app| app.caption.set( -rect.top ) );
 
 	let title  = wide( format!( "Hammer++ patcher for INFRA {}", install::VERSION ) );
 	let width  = rect.right - rect.left;
-	let height = rect.bottom - rect.top;
+	let height = rect.bottom;
 
 	unsafe { CreateWindowExW( 0, class.as_ptr(), title.as_ptr(), style, CW_USEDEFAULT, CW_USEDEFAULT, width, height, null_mut(), null_mut(), GetModuleHandleW( null() ), null() ) }
 }
@@ -1226,21 +1582,23 @@ fn run_message_loop( window: HWND )
 	}
 }
 
+fn load_icon( width: i32, height: i32 ) -> HICON
+{
+	unsafe { LoadImageW( GetModuleHandleW( null() ), APP_ICON, IMAGE_ICON, width, height, LR_DEFAULTCOLOR ) }
+}
+
 // At the size the metrics give for the DPI
-fn load_app_icon( width_metric: i32, height_metric: i32 ) -> HICON
+fn load_app_icon( win10: &Win10, width_metric: i32, height_metric: i32 ) -> HICON
 {
 	let dpi = app( |app| app.dpi.get() ) as u32;
 
-	unsafe
-	{
-		let width  = GetSystemMetricsForDpi( width_metric, dpi );
-		let height = GetSystemMetricsForDpi( height_metric, dpi );
+	let width  = win10.get_system_metrics_for_dpi( width_metric, dpi );
+	let height = win10.get_system_metrics_for_dpi( height_metric, dpi );
 
-		LoadImageW( GetModuleHandleW( null() ), APP_ICON, IMAGE_ICON, width, height, LR_DEFAULTCOLOR )
-	}
+	load_icon( width, height )
 }
 
-fn register_class( class: &[u16] )
+fn register_class( class: &[u16], win10: &Win10 )
 {
 	let window_class = WNDCLASSEXW
 	{
@@ -1250,53 +1608,72 @@ fn register_class( class: &[u16] )
 		cbClsExtra:    0,
 		cbWndExtra:    0,
 		hInstance:     unsafe { GetModuleHandleW( null() ) },
-		hIcon:         load_app_icon( SM_CXICON, SM_CYICON ),
+		hIcon:         load_app_icon( win10, SM_CXICON, SM_CYICON ),
 		hCursor:       unsafe { LoadCursorW( null_mut(), IDC_ARROW ) },
 		hbrBackground: null_mut(),
 		lpszMenuName:  null(),
 		lpszClassName: class.as_ptr(),
-		hIconSm:       load_app_icon( SM_CXSMICON, SM_CYSMICON ),
+		hIconSm:       load_app_icon( win10, SM_CXSMICON, SM_CYSMICON ),
 	};
 
 	unsafe { RegisterClassExW( &window_class ) };
 }
 
-fn startup()
+fn startup( win10: &Win10 )
 {
-	unsafe
-	{
-		SetProcessDpiAwarenessContext( DPI_AWARENESS_CONTEXT_SYSTEM_AWARE );
-		CoInitializeEx( null(), ( COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE ) as u32 );
-	}
+	win10.set_process_dpi_awareness_context( DPI_AWARENESS_CONTEXT_SYSTEM_AWARE );
 
-	let dpi   = unsafe { GetDpiForSystem() } as i32;
+	unsafe { CoInitializeEx( null(), ( COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE ) as u32 ) };
+
+	let dpi   = win10.get_dpi_for_system() as i32;
 	let field = unsafe { CreateSolidBrush( FIELD ) };
 
 	app( |app| app.dpi.set( dpi ) );
 	app( |app| app.field.set( field ) );
 
 	gdiplus::startup();
+
+	unsafe { BufferedPaintInit() };
 }
 
 // GDI+ objects first, GDI+ itself after them
 fn shutdown()
 {
 	avatar::clear();
+	icon::clear();
 	gdiplus::shutdown();
+
+	unsafe { BufferedPaintUnInit() };
 
 	unsafe { CoUninitialize() };
 }
 
+// Before Windows 10 the window does not start: it points to the command line
+fn show_unsupported()
+{
+	let title = wide( "Hammer++ patcher for INFRA" );
+	let text  = wide( UNSUPPORTED );
+
+	unsafe { MessageBoxW( null_mut(), text.as_ptr(), title.as_ptr(), MB_OK | MB_ICONERROR ) };
+}
+
 pub fn run()
 {
-	startup();
+	let Some( win10 ) = Win10::load() else
+	{
+		show_unsupported();
+
+		return;
+	};
+
+	startup( &win10 );
 
 	let class = wide( CLASS );
 
-	register_class( &class );
-	authors::register_class();
+	register_class( &class, &win10 );
+	modal::register_class();
 
-	let window = create_window( &class );
+	let window = create_window( &class, &win10 );
 
 	if !window.is_null()
 	{

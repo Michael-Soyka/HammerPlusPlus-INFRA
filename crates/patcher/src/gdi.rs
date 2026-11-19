@@ -5,7 +5,9 @@
 //=============================================================================//
 
 use crate::ui::{ scale, wide };
+use std::ptr::{ null, null_mut };
 use windows_sys::Win32::Foundation::{ COLORREF, RECT };
+use windows_sys::Win32::UI::Controls::{ BPBF_TOPDOWNDIB, BeginBufferedPaint, BufferedPaintClear, BufferedPaintSetAlpha, EndBufferedPaint };
 use windows_sys::Win32::Graphics::Gdi::{ AC_SRC_OVER, AlphaBlend, BLACK_BRUSH, BLENDFUNCTION, BitBlt, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreatePen, CreateSolidBrush, DEFAULT_CHARSET, DEFAULT_PITCH, DeleteDC, DeleteObject, DrawTextW, FillRect, GetStockObject, HDC, HFONT, HGDIOBJ, NULL_BRUSH, OUT_DEFAULT_PRECIS, PS_SOLID, RoundRect, SRCCOPY, SelectObject, SetBkMode, SetTextColor, TRANSPARENT };
 
 //-----------------------------------------------------------------------------
@@ -73,6 +75,33 @@ impl Canvas
 
 		unsafe { BitBlt( dc, rect.left, rect.top, width, height, self.dc, from_x, from_y, SRCCOPY ) };
 	}
+}
+
+// Opaque: GDI leaves alpha at 0, and the DWM frame extended into the client area shows through it.
+// The hole stays transparent for the caption buttons DWM draws
+pub fn present( dc: HDC, canvas: &Canvas, rect: &RECT, hole: Option<RECT> )
+{
+	let mut buffer_dc = null_mut();
+
+	let buffer = unsafe { BeginBufferedPaint( dc, rect, BPBF_TOPDOWNDIB, null(), &mut buffer_dc ) };
+
+	if buffer == 0
+	{
+		canvas.copy_to( dc, rect, 0, 0 );
+
+		return;
+	}
+
+	canvas.copy_to( buffer_dc, rect, 0, 0 );
+
+	unsafe { BufferedPaintSetAlpha( buffer, null(), 255 ) };
+
+	if let Some( hole ) = hole
+	{
+		unsafe { BufferedPaintClear( buffer, &hole ) };
+	}
+
+	unsafe { EndBufferedPaint( buffer, 1 ) };
 }
 
 impl Drop for Canvas

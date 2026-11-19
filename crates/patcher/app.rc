@@ -1,2 +1,35 @@
+#include <winver.h>
+#include "infra_hpp_version.h"
+
 // The lowest icon id is the one Explorer shows
 1 ICON "assets/hpp-patcher-infra-app-icon.ico"
+
+VS_VERSION_INFO VERSIONINFO
+	FILEVERSION		INFRA_HPP_VERSION_MAJOR,INFRA_HPP_VERSION_MINOR,INFRA_HPP_VERSION_BUILD,INFRA_HPP_VERSION_REVISION
+	PRODUCTVERSION	INFRA_HPP_VERSION_MAJOR,INFRA_HPP_VERSION_MINOR,INFRA_HPP_VERSION_BUILD,INFRA_HPP_VERSION_REVISION
+	FILEFLAGSMASK	VS_FFI_FILEFLAGSMASK
+	FILEFLAGS		0
+	FILEOS			VOS_NT_WINDOWS32
+	FILETYPE		VFT_APP
+	FILESUBTYPE		0
+BEGIN
+	BLOCK "StringFileInfo"
+	BEGIN
+		BLOCK "040904b0"
+		BEGIN
+			VALUE "CompanyName",		"Michael Soyka"
+			VALUE "FileDescription",	"Hammer++ patcher for INFRA"
+			VALUE "FileVersion",		INFRA_HPP_VERSION_TEXT
+			VALUE "InternalName",		"infra-hpp-patcher"
+			VALUE "LegalCopyright",		"Copyright 2026 Michael Soyka"
+			VALUE "OriginalFilename",	"infra-hpp-patcher.exe"
+			VALUE "ProductName",		"Hammer++ patcher for INFRA"
+			VALUE "ProductVersion",		INFRA_HPP_PRODUCT_VERSION
+		END
+	END
+
+	BLOCK "VarFileInfo"
+	BEGIN
+		VALUE "Translation", 0x409, 1200
+	END
+END
