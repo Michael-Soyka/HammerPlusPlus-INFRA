@@ -59,6 +59,7 @@ const ID_REMOVE:        i32 = 113;
 const ID_LAUNCH:        i32 = 115;
 const ID_INFO:          i32 = 116;
 const ID_TITLE_VERSION: i32 = 117;
+const ID_TITLE_STATUS:  i32 = 118;
 
 // At 96 DPI
 #[ derive( Clone, Copy ) ]
@@ -98,7 +99,7 @@ const CLOSE_TIMER: usize = 2;
 const SHORTCUT_PROMPT: Prompt = Prompt
 {
 	title:   "Create a desktop shortcut?",
-	text:    "There is no Hammer++ for INFRA shortcut on the desktop. It starts Hammer++ with INFRA without the patcher.",
+	text:    "There is no Hammer++ for INFRA shortcut on the desktop. It makes it easier to start Hammer++ for INFRA.",
 	choices: &[ Choice { text: "Create", accent: true }, Choice { text: "Not now", accent: false } ],
 	default: Some( CREATE_SHORTCUT ),
 };
@@ -133,19 +134,25 @@ const PARAGRAPH: u32 = DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX;
 // Text drawn over the video: no controls, which would cover it with their background
 struct Label
 {
-	id:     i32,
-	bounds: Bounds,
-	title:  bool,
-	format: u32,
+	id:      i32,
+	bounds:  Bounds,
+	title:   bool,
+	format:  u32,
+
+	// Drawn right after the text of that label
+	follows: Option<i32>,
 }
 
-const LABELS: [Label; 5] =
+const TITLE_VERSION_BOUNDS: Bounds = Bounds { x: 54, y: 46, width: 530, height: 20 };
+
+const LABELS: [Label; 6] =
 [
-	Label { id: ID_TITLE, bounds: Bounds { x: 54, y: 14, width: 530, height: 32 }, title: true, format: LINE },
-	Label { id: ID_TITLE_VERSION, bounds: Bounds { x: 54, y: 46, width: 530, height: 20 }, title: false, format: LINE },
-	Label { id: ID_GAME_LABEL, bounds: Bounds { x: 16, y: 82, width: 568, height: 20 }, title: false, format: LINE },
-	Label { id: ID_HPP_LABEL, bounds: Bounds { x: 16, y: 150, width: 568, height: 20 }, title: false, format: LINE },
-	Label { id: ID_RESULT, bounds: Bounds { x: 16, y: 220, width: 568, height: 48 }, title: false, format: PARAGRAPH },
+	Label { id: ID_TITLE, bounds: Bounds { x: 54, y: 14, width: 530, height: 32 }, title: true, format: LINE, follows: None },
+	Label { id: ID_TITLE_VERSION, bounds: TITLE_VERSION_BOUNDS, title: false, format: LINE, follows: None },
+	Label { id: ID_TITLE_STATUS, bounds: TITLE_VERSION_BOUNDS, title: false, format: LINE, follows: Some( ID_TITLE_VERSION ) },
+	Label { id: ID_GAME_LABEL, bounds: Bounds { x: 16, y: 82, width: 568, height: 20 }, title: false, format: LINE, follows: None },
+	Label { id: ID_HPP_LABEL, bounds: Bounds { x: 16, y: 150, width: 568, height: 20 }, title: false, format: LINE, follows: None },
+	Label { id: ID_RESULT, bounds: Bounds { x: 16, y: 220, width: 568, height: 48 }, title: false, format: PARAGRAPH, follows: None },
 ];
 
 const STATIC_LABELS: [(i32, &str, COLORREF); 3] =
@@ -496,6 +503,31 @@ fn set_label( id: i32, text: &str, color: COLORREF )
 	unsafe { InvalidateRect( window(), &scale_bounds( label.bounds ), 0 ) };
 }
 
+// The state of the installation goes after the version once INFRA is found, in its own color
+fn update_title_version( state: &State )
+{
+	let version = format!( "Version {}", install::VERSION );
+
+	let ( status, color ) = match ( state.game.is_some(), state.installed, state.version.as_deref() )
+	{
+		( false, _, _ ) => ( String::new(), DIM ),
+		( true, false, _ ) => ( "Not installed".to_string(), TEXT ),
+		_ if !is_outdated( state ) => ( "Installed".to_string(), GOOD ),
+		( true, true, Some( installed ) ) => ( format!( "Installed {installed}, outdated" ), WARNING ),
+		( true, true, None ) => ( "Installed, outdated".to_string(), WARNING ),
+	};
+
+	let mut leader = version;
+
+	if !status.is_empty()
+	{
+		leader = format!( "{leader} \u{2014} " );
+	}
+
+	set_label( ID_TITLE_VERSION, &leader, DIM );
+	set_label( ID_TITLE_STATUS, &status, color );
+}
+
 fn refresh_game()
 {
 	let input     = field_text( ID_GAME );
@@ -512,7 +544,10 @@ fn refresh_game()
 		}
 	);
 
-	update_buttons( &state() );
+	let state = state();
+
+	update_buttons( &state );
+	update_title_version( &state );
 	invalidate_frame( GAME_FRAME );
 }
 
@@ -1048,10 +1083,20 @@ fn draw_labels( dc: HDC )
 
 	for label in &LABELS
 	{
-		if let Some( ( text, color ) ) = labels.get( &label.id )
+		let Some( ( text, color ) ) = labels.get( &label.id ) else
 		{
-			gdi::draw_text( dc, text, scale_bounds( label.bounds ), label_font( label ), *color, label.format );
+			continue;
+		};
+
+		let font     = label_font( label );
+		let mut rect = scale_bounds( label.bounds );
+
+		if let Some( ( leader, _ ) ) = label.follows.and_then( |id| labels.get( &id ) )
+		{
+			rect.left += gdi::text_width( dc, leader, font );
 		}
+
+		gdi::draw_text( dc, text, rect, font, *color, label.format );
 	}
 }
 

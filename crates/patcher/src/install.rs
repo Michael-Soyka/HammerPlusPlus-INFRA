@@ -356,7 +356,7 @@ pub fn uninstall( game: &Path ) -> Result<String, String>
 
 	std::fs::remove_file( &manifest ).map_err( |error| format!( "{}: {error}", manifest.display() ) )?;
 
-	let message = format!( "Removed {removed} files. Hammer++ settings in bin\\hammerplusplus are kept" );
+	let message = format!( "Removed {removed} files.\nHammer++ settings in bin\\hammerplusplus are kept" );
 
 	Ok( message )
 }
@@ -368,7 +368,7 @@ fn with_removed_shortcuts( message: String, removed: usize ) -> String
 		return message;
 	}
 
-	let text = format!( "{message}. Desktop shortcuts removed: {removed}" );
+	let text = format!( "{message}. Desktop shortcuts removed" );
 
 	text
 }
