@@ -6,9 +6,9 @@
 
 use crate::ui::{ scale, wide };
 use std::ptr::{ null, null_mut };
-use windows_sys::Win32::Foundation::{ COLORREF, RECT };
+use windows_sys::Win32::Foundation::{ COLORREF, RECT, SIZE };
 use windows_sys::Win32::UI::Controls::{ BPBF_TOPDOWNDIB, BeginBufferedPaint, BufferedPaintClear, BufferedPaintSetAlpha, EndBufferedPaint };
-use windows_sys::Win32::Graphics::Gdi::{ AC_SRC_OVER, AlphaBlend, BLACK_BRUSH, BLENDFUNCTION, BitBlt, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreatePen, CreateSolidBrush, DEFAULT_CHARSET, DEFAULT_PITCH, DeleteDC, DeleteObject, DrawTextW, FillRect, GetStockObject, HDC, HFONT, HGDIOBJ, NULL_BRUSH, OUT_DEFAULT_PRECIS, PS_SOLID, RoundRect, SRCCOPY, SelectObject, SetBkMode, SetTextColor, TRANSPARENT };
+use windows_sys::Win32::Graphics::Gdi::{ AC_SRC_OVER, AlphaBlend, BLACK_BRUSH, BLENDFUNCTION, BitBlt, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreatePen, CreateSolidBrush, DEFAULT_CHARSET, DEFAULT_PITCH, DeleteDC, DeleteObject, DrawTextW, FillRect, GetStockObject, GetTextExtentPoint32W, HDC, HFONT, HGDIOBJ, NULL_BRUSH, OUT_DEFAULT_PRECIS, PS_SOLID, RoundRect, SRCCOPY, SelectObject, SetBkMode, SetTextColor, TRANSPARENT };
 
 //-----------------------------------------------------------------------------
 // Owned objects
@@ -146,6 +146,18 @@ pub fn draw_text( dc: HDC, text: &str, mut rect: RECT, font: HFONT, color: COLOR
 	let _font = Selected::new( dc, font );
 
 	unsafe { DrawTextW( dc, text.as_mut_ptr(), text.len() as i32, &mut rect, format ) };
+}
+
+pub fn text_width( dc: HDC, text: &str, font: HFONT ) -> i32
+{
+	let text: Vec<u16> = text.encode_utf16().collect();
+	let mut size        = SIZE { cx: 0, cy: 0 };
+
+	let _font = Selected::new( dc, font );
+
+	unsafe { GetTextExtentPoint32W( dc, text.as_ptr(), text.len() as i32, &mut size ) };
+
+	size.cx
 }
 
 // Black over width x height of the DC, alpha of 255 opaque
